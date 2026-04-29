@@ -22,7 +22,7 @@ Downloading YouTube content may violate [YouTube's Terms of Service (Section 5)]
 
 I wanted a simple way to save YouTube videos and audio to my phone for offline use — things like language learning lessons, focus music playlists, podcasts, and sleep sounds. No existing app did exactly what I wanted without ads, paywalls, or sketchy permissions.
 
-So I built **PocketTube**: a clean personal app where I paste a YouTube link, pick audio or video, choose a playlist category, and the file downloads straight to my phone. Everything is organized into playlists (Music, Podcasts, Sleep, Focus, Language, Videos) and plays back natively — including background audio on iOS.
+So I built **PocketTube**: a clean personal app where I paste a YouTube link, choose the format and quality I want, and the file downloads straight to my phone — ready to play offline, no internet needed.
 
 This repo is a learning project. It covers React Native, Expo, Google OAuth, Firebase, Docker, Google Cloud Run, and iOS distribution via TestFlight — all using free tiers where possible.
 
@@ -30,13 +30,35 @@ This repo is a learning project. It covers React Native, Expo, Google OAuth, Fir
 
 ## ✨ Features
 
-- 🔐 Google Sign-In (Firebase Auth)
-- 🔗 Paste any YouTube URL → choose Audio (MP3) or Video (MP4)
-- 📂 Organize downloads into playlists: Music, Podcasts, Sleep, Focus, Language, Videos, General
-- 📱 Files save locally to your device for offline playback
-- 🎧 Background audio playback on iOS (lock screen controls)
-- ☁️ Metadata synced to Firestore across devices
-- 💸 Runs entirely on free tiers (except Apple Developer account)
+### 🔐 Authentication
+- Sign in with your Google account — no separate username or password needed
+- Your library and preferences are tied to your Google account and persist across devices
+
+### 📥 Downloading Content
+- Paste any YouTube URL to bring up download options
+- **Audio download** — saves the MP3, the video's cover image (thumbnail), and metadata (title, channel, duration)
+- **Video download** — choose from available resolutions (e.g. 720p, 1080p) depending on what the source video supports; saves the video file, cover image, and metadata
+- All files are saved locally to your device for true offline playback — no streaming required
+
+### 📱 Playing Existing Files
+- Browse and play any previously downloaded file directly from your local library
+- Background audio playback on iOS (lock screen controls)
+- Native video playback for downloaded video files
+
+### 🗑️ Managing Your Library
+- Delete any previously downloaded file to free up space on your device
+
+### 💳 Plans & Upgrades
+- A **side menu** shows your current plan at a glance
+- **Free plan** users can upgrade to **Pro** with a one-time payment of **$9.99 + applicable taxes** — no subscription
+- Pro unlocks higher download limits and additional features
+
+### 🗂️ Playlists *(tentative — may not be included in v1)*
+- Optionally organize downloads into playlist categories: Music, Podcasts, Sleep, Focus, Language, Videos, General
+
+### ☁️ Infrastructure
+- Metadata synced to Firestore across devices
+- Runs entirely on free tiers (except Apple Developer account)
 
 ---
 
