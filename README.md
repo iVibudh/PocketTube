@@ -33,32 +33,60 @@ This repo is a learning project. It covers React Native, Expo, Google OAuth, Fir
 ### 🔐 Authentication
 - Sign in with your Google account — no separate username or password needed
 - Your library and preferences are tied to your Google account and persist across devices
+- Side menu includes a **sign-out** option and basic account info (profile photo, email)
 
 ### 📥 Downloading Content
 - Paste any YouTube URL to bring up download options
-- **Audio download** — saves the MP3, the video's cover image (thumbnail), and metadata (title, channel, duration)
-- **Video download** — choose from available resolutions (e.g. 720p, 1080p) depending on what the source video supports; saves the video file, cover image, and metadata
+- **Audio download** — saves the MP3, the video's cover image (thumbnail), and metadata (title, channel name, upload date, duration, source URL)
+- **Video download** — choose from available resolutions (e.g. 720p, 1080p) depending on what the source video supports; saves the video file, cover image, and the same metadata as audio
 - All files are saved locally to your device for true offline playback — no streaming required
+- A **progress bar** is displayed during the download showing percentage complete and estimated time; the download continues running in the background so the user can browse their library or use other apps while waiting
+- **Duplicate detection** — if the pasted URL has already been downloaded, the app shows a warning before proceeding. The warning displays the existing file's details (audio or video, resolution if applicable, date downloaded) and asks the user to confirm before downloading again
 
-### 📱 Playing Existing Files
-- Browse and play any previously downloaded file directly from your local library
-- Background audio playback on iOS (lock screen controls)
-- Native video playback for downloaded video files
+### 🎵 Media Player
+The media player is a core part of the app — both audio and video files should have a full-featured playback experience once downloaded.
+
+**Audio player**
+- Displays the cover image (thumbnail), track title, and channel/artist name
+- Play / Pause button
+- Seek bar with current position and total duration
+- Volume control
+- Playback speed selector (0.5×, 0.75×, 1×, 1.25×, 1.5×, 2×) — useful for podcasts and language learning content
+- Previous / Next buttons to move through the library or playlist
+- Shuffle and Repeat toggles *(TBD)*
+- **Background playback** — audio continues when the screen locks or the user switches apps
+- **Lock screen / Control Center controls** on iOS (Now Playing widget) and Android (media notification) — play, pause, seek, skip
+- Persistent **mini-player bar** at the bottom of the screen while browsing the library, so the user never has to leave a screen to control playback
+
+**Video player**
+- Full-screen video display with native transport controls (play/pause, seek, volume)
+- Portrait and landscape orientation support
+- Playback speed selector *(TBD)*
+- Returns to library on close without interrupting any background audio
+
+### 📱 Library
+- Browse all downloaded files in a clean list view showing cover image, title, file type, resolution (for video), and date downloaded
+- *(TBD)* Sort by title, date downloaded, or file type
+- *(TBD)* Search by title or channel name
+- *(TBD)* Show total local storage used by PocketTube
 
 ### 🗑️ Managing Your Library
 - Delete any previously downloaded file to free up space on your device
 
 ### 💳 Plans & Upgrades
-- A **side menu** shows your current plan at a glance
-- **Free plan** users can upgrade to **Pro** with a one-time payment of **$9.99 + applicable taxes** — no subscription
-- Pro unlocks higher download limits and additional features
+- A **side menu** button shows the user's current plan at a glance (Free or Pro)
+- **Free plan** — the user can store a maximum of **10 files** on their device at any one time; to add more, they must delete existing files or upgrade
+- **Pro plan** — one-time payment of **$9.99 + applicable taxes**, no subscription; Pro users have no limit on total stored files but are capped at **10 new downloads per day** to stay within backend resource limits
+- Plan status is stored in Firestore and verified on app launch
+
+> 💳 **Payment implementation — placeholder for a future release.** In-app purchases on iOS require Apple's StoreKit and on Android require Google Play Billing — both platforms take a 15–30% cut of each transaction. No additional third-party payment library is planned at this stage; native platform IAP is the simplest path with no extra fees beyond the store's standard cut. This feature will be scoped and implemented in a dedicated release.
 
 ### 🗂️ Playlists *(tentative — may not be included in v1)*
 - Optionally organize downloads into playlist categories: Music, Podcasts, Sleep, Focus, Language, Videos, General
 
 ### ☁️ Infrastructure
 - Metadata synced to Firestore across devices
-- Runs entirely on free tiers (except Apple Developer account)
+- Runs entirely on free tiers (except Apple Developer account and payment processing fees)
 
 ---
 
@@ -72,6 +100,7 @@ This repo is a learning project. It covers React Native, Expo, Google OAuth, Fir
 | File Storage | Firebase Storage | Free tier (5 GB) |
 | Download Engine | yt-dlp + Node.js backend | Free |
 | Cloud Hosting | Google Cloud Run | Free tier (2M req/mo) |
+| In-App Payments | Apple StoreKit + Google Play Billing *(future release)* | 15–30% platform cut per transaction |
 | iOS Distribution | TestFlight (personal) | $99/yr — Apple Dev account |
 
 ---
