@@ -14,14 +14,13 @@ const { getJob } = require('../utils/jobs');
  * {
  *   id, status: 'done', progress: 100,
  *   result: {
- *     storageUrl:    string,   // signed URL to media file in Firebase Storage
- *     storagePath:   string,   // Storage path  e.g. users/uid/abc123.mp3
- *     thumbnailUrl:  string,   // signed URL to thumbnail in Firebase Storage
- *     thumbnailPath: string,   // Storage path  e.g. users/uid/thumbnails/abc123.jpg
- *     filename:      string,
- *     format:        'audio'|'video',
- *     resolution:    number|null,
- *     metadata: { videoId, title, channel, uploadDate, duration, sourceUrl }
+ *     localPath:   string,         // temp file path on server -- used by GET /api/file/:jobId
+ *     filename:    string,         // e.g. "dQw4w9WgXcQ.mp3"
+ *     format:      'audio'|'video',
+ *     resolution:  number|null,    // e.g. 720 for video; null for audio
+ *     metadata: {
+ *       videoId, title, channel, uploadDate, duration, thumbnailUrl, sourceUrl
+ *     }
  *   }
  * }
  *

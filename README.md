@@ -1,7 +1,7 @@
 # 🎵 PocketTube
 
 > **A personal YouTube audio & video downloader for iOS and Android**
-> Built with React Native + Expo · Google Cloud Run · Firebase
+> Built with React Native + Expo · Railway · Firebase
 
 ---
 
@@ -24,7 +24,7 @@ I wanted a simple way to save YouTube videos and audio to my phone for offline u
 
 So I built **PocketTube**: a clean personal app where I paste a YouTube link, choose the format and quality I want, and the file downloads straight to my phone — ready to play offline, no internet needed.
 
-This repo is a learning project. It covers React Native, Expo, Google OAuth, Firebase, Docker, Google Cloud Run, and iOS distribution via TestFlight — all using free tiers where possible.
+This repo is a learning project. It covers React Native, Expo, Google OAuth, Firebase, Docker, Railway, and iOS distribution via TestFlight — all using free tiers where possible.
 
 ---
 
@@ -97,9 +97,9 @@ The media player is a core part of the app — both audio and video files should
 | Mobile App | React Native + Expo | Free |
 | Authentication | Firebase (Google Auth) | Free tier |
 | Database / Metadata | Firebase Firestore | Free tier |
-| File Storage | Firebase Storage | Free tier (5 GB) |
+| File Storage | Device-local only (no cloud storage) | Free |
 | Download Engine | yt-dlp + Node.js backend | Free |
-| Cloud Hosting | Google Cloud Run | Free tier (2M req/mo) |
+| Cloud Hosting | Railway | Free tier ($5/mo credit) |
 | In-App Payments | Apple StoreKit + Google Play Billing *(future release)* | 15–30% platform cut per transaction |
 | iOS Distribution | TestFlight (personal) | $99/yr — Apple Dev account |
 
@@ -111,7 +111,7 @@ The media player is a core part of the app — both audio and video files should
 |---|---|---|
 | [Phase 1](#phase-1--firebase-setup) | Firebase project, Auth, Firestore, Storage | Day 1 |
 | [Phase 2](#phase-2--backend-server) | Node.js backend with yt-dlp + Docker | Days 1–2 |
-| [Phase 3](#phase-3--deploy-to-google-cloud-run) | Deploy backend to Google Cloud Run (free) | Day 2 |
+| [Phase 3](#phase-3--deploy-to-railway) | Deploy backend to Railway (free) | Day 2 |
 | [Phase 4](#phase-4--react-native-mobile-app) | Full mobile app — Login, Download, Library, Player | Days 3–7 |
 | [Phase 5](#phase-5--ios-distribution-via-testflight) | Build and distribute via TestFlight | Day 8 |
 | [Phase 6](#phase-6--google-oauth-client-ids) | Wire up Google OAuth client IDs | Day 8 |
@@ -128,7 +128,7 @@ Before you start, create these free accounts and install these tools.
 | Service | URL | Purpose |
 |---|---|---|
 | Google Firebase | firebase.google.com | Auth, database, file storage |
-| Google Cloud | cloud.google.com | Cloud Run backend hosting |
+| Railway | railway.app | Backend hosting |
 | Expo (EAS) | expo.dev | Mobile app builds |
 | Apple Developer | developer.apple.com | TestFlight ($99/yr) |
 | GitHub | github.com | Version control |
@@ -138,7 +138,7 @@ Before you start, create these free accounts and install these tools.
 - **Node.js v18+** — nodejs.org
 - **Python 3.10+** — python.org
 - **Git** — git-scm.com
-- **Google Cloud CLI** — cloud.google.com/sdk
+- **Railway CLI** — `npm install -g @railway/cli`
 - **Expo CLI + EAS CLI** — `npm install -g expo-cli eas-cli`
 - **yt-dlp** — `pip install yt-dlp`
 - **ffmpeg** — ffmpeg.org
@@ -207,7 +207,14 @@ service cloud.firestore {
 
 ---
 
-### Step 1.4 — Create Firebase Storage
+### Step 1.4 — Create Firebase Storage *(optional — not used by the backend)*
+
+> The backend no longer uploads files to Firebase Storage. Media files are served directly from the server to your phone and stored locally on device. You can skip this step entirely.
+>
+> If you later decide to add cross-device sync or cloud backup, come back and set this up then.
+
+<details>
+<summary>Setup instructions (if needed in future)</summary>
 
 1. In sidebar click **Build → Storage**
 2. Click **"Get started"** → **"Next"** → **"Done"**
@@ -227,6 +234,8 @@ service firebase.storage {
 
 4. Click **Publish**
 
+</details>
+
 ---
 
 ### Step 1.5 — Get Your Firebase Config Keys
@@ -244,7 +253,7 @@ service firebase.storage {
 - [ ] Firebase project created named `pockettube`
 - [ ] Google Authentication enabled
 - [ ] Firestore database created with security rules published
-- [ ] Firebase Storage created with security rules published
+- [ ] Firebase Storage — skip (not used; see Step 1.4 if needed later)
 - [ ] `firebaseConfig` object copied and saved somewhere safe
 - [ ] `firebase-service-account.json` downloaded and stored safely
 
@@ -252,7 +261,7 @@ service firebase.storage {
 
 ## Phase 2 — Backend Server
 
-> **Summary:** The backend is a small Node.js API that does the actual downloading. When the app sends it a YouTube URL, it runs `yt-dlp` to fetch the audio or video, converts it with `ffmpeg`, uploads the file to Firebase Storage, and returns a download link. This runs in a Docker container so it can be deployed to Cloud Run in Phase 3.
+> **Summary:** The backend is a small Node.js API that does the actual downloading. When the app sends it a YouTube URL, it runs `yt-dlp` to fetch the audio or video, converts it with `ffmpeg`, and streams the file directly back to your phone — no cloud storage involved. The only Firebase service the backend uses is Auth (to verify your identity on each request). Everything runs in a Docker container deployed to Railway in Phase 3.
 
 ---
 
@@ -272,14 +281,23 @@ backend/
   src/
     index.js                      ← main Express server
     routes/
-      download.js                 ← download endpoint
+      download.js                 ← start async download job
+      file.js                     ← stream completed file to device
+      info.js                     ← fetch video metadata / resolutions
+      status.js                   ← poll job progress
+    middleware/
+      auth.js                     ← Firebase token verification
+      planCheck.js                ← plan enforcement (client-side placeholder)
     utils/
+      firebase.js                 ← Firebase Admin init (Auth only)
+      jobs.js                     ← in-memory async job store
+      storage.js                  ← local temp file helper
       ytdlp.js                    ← yt-dlp wrapper
-      storage.js                  ← Firebase Storage helper
   Dockerfile
-  .env                            ← secrets (never commit!)
+  .env                            ← PORT only (never commit!)
   .gitignore
-  firebase-service-account.json   ← from Step 1.5
+  .railwayignore
+  firebase-service-account.json   ← from Step 1.5 (uploaded to Railway, not git)
 ```
 
 ---
@@ -289,9 +307,10 @@ backend/
 Create `backend/.env`:
 
 ```
-FIREBASE_BUCKET=your-project-id.appspot.com
 PORT=8080
 ```
+
+> `FIREBASE_BUCKET` is no longer needed — the backend does not use Firebase Storage.
 
 Create `backend/.gitignore`:
 
@@ -302,6 +321,15 @@ firebase-service-account.json
 downloads/
 ```
 
+Create `backend/.railwayignore`:
+
+```
+node_modules/
+.env
+```
+
+> Note: `firebase-service-account.json` is intentionally **not** in `.railwayignore` — Railway needs to upload it so the backend can verify Firebase tokens. It stays out of Git but goes to Railway.
+
 ---
 
 ### Step 2.3 — Main Server (`src/index.js`)
@@ -311,18 +339,34 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 
+require('./utils/firebase'); // initialize Firebase Admin (Auth only)
+
+const { verifyToken } = require('./middleware/auth');
+const { checkPlan }   = require('./middleware/planCheck');
+
+const infoRouter     = require('./routes/info');
 const downloadRouter = require('./routes/download');
+const statusRouter   = require('./routes/status');
+const fileRouter     = require('./routes/file');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Public
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
-app.use('/api/download', downloadRouter);
+
+// All /api/* routes require a valid Firebase ID token
+app.use('/api', verifyToken);
+
+app.use('/api/info',     infoRouter);                // POST  - get video metadata
+app.use('/api/download', checkPlan, downloadRouter); // POST  - start async download job
+app.use('/api/status',   statusRouter);              // GET   - poll job progress
+app.use('/api/file',     fileRouter);                // GET   - stream completed file to device
 
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
-  console.log(`PocketTube backend running on port ${PORT}`);
+  console.log('PocketTube backend running on port ' + PORT);
 });
 ```
 
@@ -363,73 +407,81 @@ module.exports = { downloadMedia };
 
 ---
 
-### Step 2.5 — Firebase Storage Utility (`src/utils/storage.js`)
+### Step 2.5 — Local File Helper (`src/utils/storage.js`)
+
+No Firebase Storage — just a helper that tracks where yt-dlp writes temp files.
 
 ```js
-const admin = require('firebase-admin');
-const fs = require('fs');
 const path = require('path');
 
-if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.cert(
-      require('../../firebase-service-account.json')
-    ),
-    storageBucket: process.env.FIREBASE_BUCKET
-  });
+const DOWNLOADS_DIR = process.platform === 'win32'
+  ? path.join(require('os').tmpdir(), 'pockettube-downloads')
+  : '/tmp/downloads';
+
+function getLocalPath(jobId, format) {
+  var ext = format === 'audio' ? 'mp3' : 'mp4';
+  return path.join(DOWNLOADS_DIR, jobId + '.' + ext);
 }
 
-const bucket = admin.storage().bucket();
-
-async function uploadFile(localPath, userId, filename) {
-  const destination = `users/${userId}/${filename}`;
-  await bucket.upload(localPath, {
-    destination,
-    metadata: {
-      contentType: filename.endsWith('.mp3') ? 'audio/mpeg' : 'video/mp4'
-    }
-  });
-  const [url] = await bucket.file(destination).getSignedUrl({
-    action: 'read',
-    expires: Date.now() + 7 * 24 * 60 * 60 * 1000  // 7 days
-  });
-  fs.unlinkSync(localPath); // clean up temp file
-  return { url, destination };
-}
-
-module.exports = { uploadFile };
+module.exports = { getLocalPath };
 ```
 
 ---
 
 ### Step 2.6 — Download Route (`src/routes/download.js`)
 
+Returns a `jobId` immediately and runs yt-dlp in the background. The mobile polls for progress then fetches the file once done.
+
 ```js
 const express = require('express');
 const router = express.Router();
-const { downloadMedia } = require('../utils/ytdlp');
-const { uploadFile } = require('../utils/storage');
 const path = require('path');
+const { downloadMedia } = require('../utils/ytdlp');
+const { createJob, updateJob } = require('../utils/jobs');
 
 router.post('/', async (req, res) => {
-  const { url, format, userId, filename } = req.body;
+  const { url, format, resolution, metadata } = req.body;
 
-  if (!url || !format || !userId) {
-    return res.status(400).json({ error: 'url, format, userId required' });
+  if (!url || !format) {
+    return res.status(400).json({ error: 'url and format are required' });
   }
 
-  try {
-    console.log(`Downloading ${format} from ${url}`);
-    const localPath = await downloadMedia(url, format);
-    const fname = filename || path.basename(localPath);
-    const { url: downloadUrl, destination } = await uploadFile(
-      localPath, userId, fname
-    );
-    res.json({ success: true, url: downloadUrl, path: destination });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
-  }
+  const jobId = createJob();
+  res.json({ jobId });
+
+  ;(async () => {
+    try {
+      updateJob(jobId, { status: 'downloading', progress: 5 });
+
+      const localPath = await downloadMedia(url, format, resolution, (frac) => {
+        updateJob(jobId, { progress: Math.round(5 + frac * 90) });
+      });
+
+      const ext      = format === 'audio' ? 'mp3' : 'mp4';
+      const stem     = metadata && metadata.videoId
+        ? metadata.videoId
+        : path.basename(localPath, '.' + ext);
+
+      updateJob(jobId, {
+        status: 'done', progress: 100,
+        result: {
+          localPath, filename: stem + '.' + ext, format,
+          resolution: format === 'video' ? (resolution || null) : null,
+          metadata: {
+            videoId:      (metadata && metadata.videoId)      || stem,
+            title:        (metadata && metadata.title)        || stem,
+            channel:      (metadata && metadata.channel)      || '',
+            uploadDate:   (metadata && metadata.uploadDate)   || null,
+            duration:     (metadata && metadata.duration)     || null,
+            thumbnailUrl: (metadata && metadata.thumbnailUrl) || null,
+            sourceUrl:    (metadata && metadata.sourceUrl)    || url
+          }
+        }
+      });
+    } catch (err) {
+      updateJob(jobId, { status: 'error', error: err.message });
+    }
+  })();
 });
 
 module.exports = router;
@@ -437,7 +489,44 @@ module.exports = router;
 
 ---
 
-### Step 2.7 — Dockerfile
+### Step 2.7 — File Serving Route (`src/routes/file.js`)
+
+Streams the completed file directly to the mobile app, then deletes it from `/tmp`.
+
+```js
+const express = require('express');
+const router = express.Router();
+const fs = require('fs');
+const { getJob } = require('../utils/jobs');
+
+router.get('/:jobId', (req, res) => {
+  const job = getJob(req.params.jobId);
+
+  if (!job)                    return res.status(404).json({ error: 'Job not found or expired' });
+  if (job.status !== 'done')   return res.status(404).json({ error: 'Job not ready yet' });
+  if (!fs.existsSync(job.result.localPath))
+                               return res.status(410).json({ error: 'File already served or server restarted' });
+
+  const { localPath, filename, format } = job.result;
+  const stat = fs.statSync(localPath);
+
+  res.setHeader('Content-Type', format === 'audio' ? 'audio/mpeg' : 'video/mp4');
+  res.setHeader('Content-Length', stat.size);
+  res.setHeader('Content-Disposition', 'attachment; filename="' + filename + '"');
+
+  const stream = fs.createReadStream(localPath);
+  stream.pipe(res);
+  stream.on('close', function() {
+    try { fs.unlinkSync(localPath); } catch (e) {}
+  });
+});
+
+module.exports = router;
+```
+
+---
+
+### Step 2.8 — Dockerfile
 
 ```dockerfile
 FROM python:3.11-slim
@@ -460,7 +549,7 @@ CMD ["node", "src/index.js"]
 
 ---
 
-### Step 2.8 — Test Locally
+### Step 2.9 — Test Locally
 
 ```bash
 # In the backend/ folder
@@ -476,90 +565,149 @@ curl http://localhost:8080/health
 ### ✅ Phase 2 Checklist
 
 - [ ] `backend/` folder and file structure created
-- [ ] `.env` file created with Firebase bucket name
+- [ ] `.env` contains `PORT=8080` only
 - [ ] `.gitignore` excludes `.env` and `firebase-service-account.json`
-- [ ] `index.js`, `download.js`, `ytdlp.js`, `storage.js` all created
+- [ ] `.railwayignore` created (excludes `node_modules/` and `.env` — NOT the service account)
+- [ ] `firebase-service-account.json` placed in `backend/` (from Step 1.5)
+- [ ] All source files created: `index.js`, `routes/download.js`, `routes/file.js`, `routes/info.js`, `routes/status.js`, `middleware/auth.js`, `middleware/planCheck.js`, `utils/firebase.js`, `utils/jobs.js`, `utils/storage.js`, `utils/ytdlp.js`
 - [ ] `Dockerfile` created
 - [ ] Local health check returns `{"status":"ok"}`
 
 ---
 
-## Phase 3 — Deploy to Google Cloud Run
+## Phase 3 — Deploy to Railway
 
-> **Summary:** Google Cloud Run hosts your backend as a serverless container. It only runs when a request comes in (so cost is near-zero for personal use) and scales to zero when idle. The free tier covers 2 million requests and 360,000 GB-seconds of compute per month — far more than you'll ever use personally. You build a Docker image and deploy it with two `gcloud` commands.
-
----
-
-### Step 3.1 — Set Up Google Cloud
-
-1. Go to [cloud.google.com](https://cloud.google.com) → create a new project named `pockettube`
-2. Enable billing (required even for free tier — a card is needed but you won't be charged under limits)
-3. Authenticate in your terminal:
-
-```bash
-gcloud auth login
-gcloud config set project YOUR_PROJECT_ID
-```
-
-4. Enable required APIs:
-
-```bash
-gcloud services enable run.googleapis.com
-gcloud services enable cloudbuild.googleapis.com
-gcloud services enable artifactregistry.googleapis.com
-```
+> **Summary:** Railway hosts your Docker container with a permanent public URL and no cold starts. It builds your image directly from your local files — no Docker Hub or container registry account needed. The free tier gives you $5/month in credits, which runs this backend for ~500 hours — more than enough for personal use. Setup takes about 5 minutes.
 
 ---
 
-### Step 3.2 — Build and Deploy
+### Step 3.1 — Create a Railway Account
+
+1. Go to [railway.app](https://railway.app) → sign up (easiest with your GitHub account)
+2. No billing setup required — the free $5/month credit is applied automatically
+
+---
+
+### Step 3.2 — Install the Railway CLI and Log In
+
+```bash
+npm install -g @railway/cli
+railway login
+```
+
+This opens a browser window to complete authentication. Once done, your terminal is connected to your Railway account.
+
+---
+
+### Step 3.3 — Add a `.railwayignore` File
+
+Railway CLI respects `.railwayignore` (not `.gitignore`) when deciding what to upload. You need `firebase-service-account.json` on the server, so create a separate ignore file that only excludes `node_modules` and the local `.env` (Railway manages env vars separately):
+
+Create `backend/.railwayignore`:
+
+```
+node_modules/
+.env
+```
+
+> ⚠️ Do **not** add `firebase-service-account.json` here. Railway needs it to authenticate with Firebase. It stays out of Git (via `.gitignore`) but must be uploaded to Railway.
+
+---
+
+### Step 3.4 — Initialize the Railway Project
 
 From inside the `backend/` folder:
 
 ```bash
-# Build and push Docker image
-gcloud builds submit --tag gcr.io/YOUR_PROJECT_ID/pockettube-backend
-
-# Deploy to Cloud Run
-gcloud run deploy pockettube-backend \
-  --image gcr.io/YOUR_PROJECT_ID/pockettube-backend \
-  --platform managed \
-  --region us-central1 \
-  --allow-unauthenticated \
-  --memory 1Gi \
-  --timeout 300 \
-  --set-env-vars FIREBASE_BUCKET=your-project-id.appspot.com
+cd backend
+railway init
 ```
 
-Copy the URL from the output — it looks like:
-`https://pockettube-backend-xxxx-uc.a.run.app`
+When prompted:
+- **Create a new project** → select this
+- **Project name** → `pockettube`
 
-This is your `BACKEND_URL`. Save it.
+Railway creates a new project in your dashboard and links it to this folder.
 
 ---
 
-### Step 3.3 — Test the Deployed Backend
+### Step 3.5 — Set Environment Variables
+
+Set your environment variables in Railway before deploying (the `.env` file is ignored by Railway and should never be committed):
 
 ```bash
-curl -X POST https://YOUR_BACKEND_URL/api/download \
-  -H 'Content-Type: application/json' \
-  -d '{"url":"https://youtube.com/watch?v=dQw4w9WgXcQ",
-       "format":"audio","userId":"test123"}'
+railway variables set PORT=8080
 ```
 
-> 💡 **Free Tier Reminder:** Cloud Run free tier is 2 million requests/month and 360,000 GB-seconds of compute. Downloading a few videos a day will never come close to these limits.
+> `FIREBASE_BUCKET` is no longer needed — Firebase Storage is not used by the backend.
+
+You can also manage these in the Railway dashboard under **Project → Variables**.
+
+---
+
+### Step 3.6 — Deploy
+
+```bash
+railway up
+```
+
+Railway uploads your files, builds the Docker image using your `Dockerfile`, and starts the container. The first build takes 3–5 minutes (it installs Node, Python, ffmpeg, and yt-dlp). Subsequent deploys are faster.
+
+You'll see a build log stream in your terminal. When it finishes you'll see:
+
+```
+✅  Deployment successful
+```
+
+---
+
+### Step 3.7 — Get Your Public URL
+
+Railway doesn't generate a public URL automatically — you need to enable it once:
+
+1. Go to [railway.app](https://railway.app) → open your `pockettube` project
+2. Click your service → **Settings** tab → **Networking** section
+3. Click **Generate Domain**
+
+Your URL will look like:
+`https://pockettube-production.up.railway.app`
+
+This is your `BACKEND_URL`. Save it — you'll use it in Phase 4.
+
+Alternatively, generate it from the CLI:
+
+```bash
+railway domain
+```
+
+---
+
+### Step 3.8 — Test the Deployed Backend
+
+```bash
+# Health check
+curl https://YOUR_RAILWAY_URL/health
+# Expected: {"status":"ok"}
+
+# Start a download job (requires a real Firebase ID token from the mobile app)
+# The health check above is enough to confirm the backend is live at this stage
+```
+
+> 💡 **Free Tier Reminder:** Railway's $5/month credit covers ~500 hours of a small container. For a personal app that you use a few times a week, you will stay well within the free limit. Monitor usage in the Railway dashboard under **Usage**.
 
 ---
 
 ### ✅ Phase 3 Checklist
 
-- [ ] Google Cloud project created
-- [ ] Billing enabled on Google Cloud
-- [ ] `gcloud auth login` completed successfully
-- [ ] All three APIs enabled (run, cloudbuild, artifactregistry)
-- [ ] Docker image built and pushed to `gcr.io`
-- [ ] Backend deployed to Cloud Run
+- [ ] Railway account created at railway.app
+- [ ] Railway CLI installed and `railway login` completed
+- [ ] `backend/.railwayignore` created (excludes `node_modules/` and `.env` only)
+- [ ] `railway init` run inside `backend/` folder
+- [ ] Environment variable set (`PORT=8080`)
+- [ ] `railway up` deployed successfully
+- [ ] Public domain generated in Railway dashboard
 - [ ] `BACKEND_URL` saved
-- [ ] Test curl returns a successful response
+- [ ] Health check and download test both return successful responses
 
 ---
 
@@ -1181,13 +1329,13 @@ onAuthStateChanged(auth, (user) => {
 |---|---|---|
 | Firebase Auth | Unlimited users | $0 |
 | Firestore | 1 GB storage, 50K reads/day | $0 |
-| Firebase Storage | 5 GB storage, 1 GB/day download | $0 |
-| Google Cloud Run | 2M requests, 360K GB-sec/mo | $0 |
+| Firebase Storage | Not used — files stored on device | $0 |
+| Railway | $5/month free credit (~500 hrs) | $0 |
 | Expo EAS Build | 30 builds/month | $0 |
 | Apple Developer | — | $99/yr one-time |
 | **Total (excl. Apple)** | — | **$0/mo** |
 
-> **Storage tip:** Firebase Storage's 5 GB free tier holds roughly 1,000 MP3s or 200 videos. If you download heavily, consider saving files device-locally only and skipping Firebase Storage uploads — just store the `localUri` in Firestore.
+> **Storage tip:** All media files are saved directly to your phone by the mobile app using `expo-file-system`. Nothing is uploaded to the cloud, so there are no storage costs regardless of how much you download.
 
 ---
 
@@ -1195,13 +1343,15 @@ onAuthStateChanged(auth, (user) => {
 
 | Problem | Likely Cause | Fix |
 |---|---|---|
-| yt-dlp fails on Cloud Run | Not installed in Docker image | Verify `Dockerfile` has `pip install yt-dlp` |
-| Cloud Run timeout | Long video download | Add `--timeout 300` to deploy command |
+| yt-dlp fails on Railway | Not installed in Docker image | Verify `Dockerfile` has `pip install yt-dlp` |
+| Railway build times out | Large Docker image (ffmpeg + yt-dlp) | Normal — first build takes 3–5 min; subsequent builds are faster |
+| Railway deploy succeeds but health check fails | `PORT` env var not set | Run `railway variables set PORT=8080` |
+| `firebase-service-account.json` not found on server | File excluded from upload | Check `.railwayignore` — it should NOT list the service account file |
 | Google sign-in error | Wrong client ID | Double-check all 3 OAuth client IDs match |
 | File not found on phone | Wrong `localUri` | Log `FileSystem.documentDirectory` to verify path |
 | Audio won't play in background | Missing plist key | Add `UIBackgroundModes: ["audio"]` to `app.json` |
-| Cloud Run cold start slow | Container spun down | Add `--min-instances 1` (may cost ~$3/mo) |
 | Firebase Storage 403 error | Wrong security rules | Re-check Phase 1 Step 1.4 rules and re-publish |
+| Railway free credits running low | Container running continuously | Railway dashboard → Usage to monitor; container stays on but usage is minimal at rest |
 
 ---
 
@@ -1210,7 +1360,7 @@ onAuthStateChanged(auth, (user) => {
 - [Expo Documentation](https://docs.expo.dev)
 - [Firebase Docs](https://firebase.google.com/docs)
 - [yt-dlp GitHub](https://github.com/yt-dlp/yt-dlp)
-- [Google Cloud Run Docs](https://cloud.google.com/run/docs)
+- [Railway Docs](https://docs.railway.app)
 - [React Navigation Docs](https://reactnavigation.org)
 - [EAS Build Guide](https://docs.expo.dev/build/introduction)
 
