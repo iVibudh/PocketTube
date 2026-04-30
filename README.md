@@ -670,7 +670,7 @@ Railway doesn't generate a public URL automatically — you need to enable it on
 3. Click **Generate Domain**
 
 Your URL will look like:
-`https://pockettube-production.up.railway.app`
+`https://pockettube.up.railway.app`
 
 This is your `BACKEND_URL`. Save it — you'll use it in Phase 4.
 
