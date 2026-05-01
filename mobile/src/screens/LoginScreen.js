@@ -54,7 +54,10 @@ export default function LoginScreen() {
           <Text style={styles.btnText}>Sign in with Google</Text>
         </TouchableOpacity>
       )}
-      <Text style={styles.disclaimer}>For personal use only · Not affiliated with YouTube</Text>
+      <View style={styles.footer}>
+        <Text style={styles.disclaimer}>For personal use only · Not affiliated with YouTube</Text>
+        <Text style={styles.version}>Version 1.0.0</Text>
+      </View>
     </View>
   );
 }
@@ -68,5 +71,7 @@ const styles = StyleSheet.create({
   btn:         { backgroundColor: COLORS.teal, paddingVertical: 16, paddingHorizontal: 48, borderRadius: 12, width: '100%', alignItems: 'center' },
   btnDisabled: { backgroundColor: COLORS.surface },
   btnText:     { color: '#ffffff', fontSize: 18, fontWeight: '600' },
-  disclaimer:  { position: 'absolute', bottom: 40, fontSize: 12, color: COLORS.textMuted },
+  footer:      { position: 'absolute', bottom: 40, alignItems: 'center', gap: 4 },
+  disclaimer:  { fontSize: 12, color: COLORS.textMuted },
+  version:     { fontSize: 11, color: COLORS.border },
 });
