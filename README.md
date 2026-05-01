@@ -113,7 +113,7 @@ The media player is a core part of the app — both audio and video files should
 | [Phase 2](#phase-2--backend-server) | Node.js backend with yt-dlp + Docker | Days 1–2 |
 | [Phase 3](#phase-3--deploy-to-railway) | Deploy backend to Railway (free) | Day 2 |
 | [Phase 4](#phase-4--react-native-mobile-app) | Full mobile app — Login, Download, Library, Player | Days 3–7 |
-| [Phase 5](#phase-5--ios-distribution-via-testflight) | Build and distribute via TestFlight | Day 8 |
+| [Phase 5](#phase-5--run-on-your-phone-with-expo-go) | Install Expo Go and run app on your phone | Day 8 |
 | [Phase 6](#phase-6--google-oauth-client-ids) | Wire up Google OAuth client IDs | Day 8 |
 | [Phase 7](#phase-7--playlist-system) | Playlist system and auto-categorization | Day 9 |
 
@@ -1149,21 +1149,24 @@ Scan the QR code with the **Expo Go** app on your iPhone or Android. The full ap
 
 ---
 
-## Phase 5 — iOS Distribution via TestFlight
+## Phase 5 — Run on Your Phone with Expo Go
 
-> **Summary:** TestFlight is Apple's official beta testing platform and the cleanest way to install a personal app on your iPhone without going through App Store review. You need a paid Apple Developer account ($99/yr). Expo's EAS (Expo Application Services) builds the `.ipa` file for you and submits it directly to TestFlight with a single command.
+> **Summary:** Expo Go is a free app available on the App Store and Google Play that lets you run your Expo project on a real device instantly — no Apple Developer account, no build step, no cost. You scan a QR code from your terminal and the full app loads on your phone. This is the recommended approach for personal and learning projects.
 
 ---
 
-### Step 5.1 — Apple Developer Account
+### Step 5.1 — Install Expo Go on Your Phone
 
-1. Go to [developer.apple.com](https://developer.apple.com) → enroll in the **Apple Developer Program** ($99/yr)
-2. Once approved, go to **Certificates, Identifiers & Profiles**
-3. Create an **App ID**: `com.yourname.pockettube`
+- **iPhone:** Search "Expo Go" in the App Store → install (free)
+- **Android:** Search "Expo Go" in the Google Play Store → install (free)
+
+> No account required on the phone itself — just the app.
 
 ---
 
 ### Step 5.2 — Update `app.json`
+
+Even without a paid Apple account, you should set up `app.json` correctly so background audio and file access work as expected inside Expo Go:
 
 ```json
 {
@@ -1173,7 +1176,6 @@ Scan the QR code with the **Expo Go** app on your iPhone or Android. The full ap
     "version": "1.0.0",
     "platforms": ["ios", "android"],
     "ios": {
-      "bundleIdentifier": "com.yourname.pockettube",
       "infoPlist": {
         "UIBackgroundModes": ["audio"],
         "UIFileSharingEnabled": true,
@@ -1181,7 +1183,6 @@ Scan the QR code with the **Expo Go** app on your iPhone or Android. The full ap
       }
     },
     "android": {
-      "package": "com.yourname.pockettube",
       "permissions": ["READ_EXTERNAL_STORAGE", "WRITE_EXTERNAL_STORAGE"]
     }
   }
@@ -1190,38 +1191,41 @@ Scan the QR code with the **Expo Go** app on your iPhone or Android. The full ap
 
 ---
 
-### Step 5.3 — Build and Submit with EAS
+### Step 5.3 — Start the Dev Server and Scan
 
 ```bash
-# Log in to Expo
-eas login
-
-# Initialize EAS build config
-eas build:configure
-
-# Build for iOS (.ipa file — takes ~15 min)
-eas build --platform ios
-
-# Submit to TestFlight
-eas submit --platform ios
+cd mobile
+npx expo start
 ```
 
-EAS will guide you through connecting your Apple Developer account. Once submitted, open **App Store Connect → TestFlight** and install the app on your iPhone.
+A QR code appears in your terminal. Open the **Expo Go** app on your phone and scan it. PocketTube loads on your device in seconds — no build required.
 
-> 💡 **Skip this during development.** Use Expo Go while you're actively building. Only go through TestFlight when you want a permanent install that works like a real app.
+> 💡 **Your phone and computer must be on the same Wi-Fi network** for the QR code scan to work. If you're on different networks, run `npx expo start --tunnel` instead (requires `npm install -g @expo/ngrok`).
+
+---
+
+### Step 5.4 — Keep the App Running
+
+Expo Go streams the app live from your dev server. This means:
+
+- The app is available as long as your computer is running `npx expo start`
+- Hot reload is active — any code change you save instantly updates on your phone
+- Downloaded files are saved locally on your device and persist between sessions
+- If you close the terminal, the app won't load until you restart the server
+
+> **Want a permanent install without paying Apple?** See the [AltStore method](https://altstore.io) — it lets you sideload a built `.ipa` using a free Apple ID. The app expires every 7 days but AltStore can auto-refresh it. This is optional and not required for the learning goals of this project.
 
 ---
 
 ### ✅ Phase 5 Checklist
 
-- [ ] Apple Developer account enrolled ($99/yr)
-- [ ] App ID `com.yourname.pockettube` created in Apple Developer portal
-- [ ] `app.json` updated with bundle identifier and background audio permission
-- [ ] `eas login` completed
-- [ ] `eas build:configure` run
-- [ ] iOS build completed successfully
-- [ ] App submitted to TestFlight
-- [ ] App installed on your iPhone via TestFlight
+- [ ] Expo Go installed on your iPhone or Android device
+- [ ] `app.json` updated with background audio and file sharing permissions
+- [ ] `npx expo start` runs without errors
+- [ ] QR code scanned and app loads on your phone
+- [ ] Google sign-in works on device
+- [ ] Download flow works end-to-end on device
+- [ ] Audio playback works (including with screen locked)
 
 ---
 
@@ -1331,9 +1335,8 @@ onAuthStateChanged(auth, (user) => {
 | Firestore | 1 GB storage, 50K reads/day | $0 |
 | Firebase Storage | Not used — files stored on device | $0 |
 | Railway | $5/month free credit (~500 hrs) | $0 |
-| Expo EAS Build | 30 builds/month | $0 |
-| Apple Developer | — | $99/yr one-time |
-| **Total (excl. Apple)** | — | **$0/mo** |
+| Expo Go | Run app on device during development | $0 |
+| **Total** | — | **$0/mo** |
 
 > **Storage tip:** All media files are saved directly to your phone by the mobile app using `expo-file-system`. Nothing is uploaded to the cloud, so there are no storage costs regardless of how much you download.
 
@@ -1352,6 +1355,9 @@ onAuthStateChanged(auth, (user) => {
 | Audio won't play in background | Missing plist key | Add `UIBackgroundModes: ["audio"]` to `app.json` |
 | Firebase Storage 403 error | Wrong security rules | Re-check Phase 1 Step 1.4 rules and re-publish |
 | Railway free credits running low | Container running continuously | Railway dashboard → Usage to monitor; container stays on but usage is minimal at rest |
+| Expo Go can't connect to dev server | Phone and computer on different networks | Run `npx expo start --tunnel` instead of the default LAN mode |
+| App disappears after closing Expo Go | Expected — Expo Go streams from dev server | Restart `npx expo start` and re-scan QR code to re-launch |
+| QR code won't scan | Camera permissions or lighting | Use the "Enter URL manually" option in Expo Go instead |
 
 ---
 
