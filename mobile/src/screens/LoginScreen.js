@@ -1,0 +1,148 @@
+// src/screens/LoginScreen.js — Step 4.3
+// Google Sign-In via expo-auth-session → Firebase credential
+
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  ActivityIndicator,
+  Alert,
+  Image,
+} from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
+import * as Google from 'expo-auth-session/providers/google';
+import { GoogleAuthProvider, signInWithCredential } from 'firebase/auth';
+import { auth } from '../firebase';
+import { COLORS } from '../constants';
+
+// Required for the OAuth redirect to complete inside the app
+WebBrowser.maybeCompleteAuthSession();
+
+// ── OAuth client IDs ─────────────────────────────────────────────────────────
+// These are created in Phase 6 (Google Cloud Console → APIs & Services →
+// Credentials). Paste them here once you have them.
+const EXPO_CLIENT_ID    = 'YOUR_EXPO_CLIENT_ID.apps.googleusercontent.com';
+const IOS_CLIENT_ID     = 'YOUR_IOS_CLIENT_ID.apps.googleusercontent.com';
+const ANDROID_CLIENT_ID = 'YOUR_ANDROID_CLIENT_ID.apps.googleusercontent.com';
+// ─────────────────────────────────────────────────────────────────────────────
+
+export default function LoginScreen() {
+  const [loading, setLoading] = useState(false);
+
+  const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
+    clientId:        EXPO_CLIENT_ID,
+    iosClientId:     IOS_CLIENT_ID,
+    androidClientId: ANDROID_CLIENT_ID,
+  });
+
+  // Handle the response from Google's OAuth flow
+  React.useEffect(() => {
+    if (response?.type === 'success') {
+      setLoading(true);
+      const { id_token } = response.params;
+      const credential = GoogleAuthProvider.credential(id_token);
+      signInWithCredential(auth, credential)
+        .catch((err) => {
+          Alert.alert('Sign-in failed', err.message);
+          setLoading(false);
+        });
+      // On success, onAuthStateChanged in App.js navigates to Main automatically
+    } else if (response?.type === 'error') {
+      Alert.alert('Sign-in error', response.error?.message ?? 'Unknown error');
+    }
+  }, [response]);
+
+  return (
+    <View style={styles.container}>
+
+      {/* Logo / branding */}
+      <Text style={styles.logo}>🎵</Text>
+      <Text style={styles.title}>PocketTube</Text>
+      <Text style={styles.sub}>Your personal media library</Text>
+
+      {/* Divider */}
+      <View style={styles.divider} />
+
+      {/* Sign-in button */}
+      {loading ? (
+        <ActivityIndicator size="large" color={COLORS.teal} />
+      ) : (
+        <TouchableOpacity
+          style={[styles.btn, !request && styles.btnDisabled]}
+          onPress={() => promptAsync()}
+          disabled={!request}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.btnText}>Sign in with Google</Text>
+        </TouchableOpacity>
+      )}
+
+      {/* Fine print */}
+      <Text style={styles.disclaimer}>
+        For personal use only · Not affiliated with YouTube
+      </Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.bg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+  },
+  logo: {
+    fontSize: 72,
+    marginBottom: 12,
+  },
+  title: {
+    fontSize: 42,
+    color: COLORS.teal,
+    fontWeight: 'bold',
+    marginBottom: 8,
+    letterSpacing: 1,
+  },
+  sub: {
+    fontSize: 16,
+    color: COLORS.textSecondary,
+    marginBottom: 48,
+  },
+  divider: {
+    width: 60,
+    height: 2,
+    backgroundColor: COLORS.surface,
+    marginBottom: 48,
+  },
+  btn: {
+    backgroundColor: COLORS.teal,
+    paddingVertical: 16,
+    paddingHorizontal: 48,
+    borderRadius: 12,
+    width: '100%',
+    alignItems: 'center',
+    shadowColor: COLORS.teal,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  btnDisabled: {
+    backgroundColor: COLORS.surface,
+  },
+  btnText: {
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+  },
+  disclaimer: {
+    position: 'absolute',
+    bottom: 40,
+    fontSize: 12,
+    color: COLORS.textMuted,
+  },
+});
