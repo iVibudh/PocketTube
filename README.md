@@ -1346,6 +1346,11 @@ onAuthStateChanged(auth, (user) => {
 
 | Problem | Likely Cause | Fix |
 |---|---|---|
+| "Project incompatible" in Expo Go | SDK version mismatch between project and Expo Go | Delete `mobile/node_modules` and `mobile/package-lock.json`. Run `npx create-expo-app@latest . --template blank` inside `mobile/`, then reinstall: `npm install firebase @react-navigation/native @react-navigation/bottom-tabs @react-navigation/native-stack --legacy-peer-deps` followed by `npx expo install expo-auth-session expo-web-browser expo-file-system expo-av expo-media-library expo-crypto @react-native-async-storage/async-storage react-native-screens react-native-safe-area-context`. Restore all files in `src/` from git if needed. |
+| "Open up App.js to start working" screen | `create-expo-app` overwrote `App.js` and `src/` when rescaffolding | After rescaffolding, restore `App.js`, `src/firebase.js`, `src/constants.js`, and all screen files from git before running the app. |
+| `npm install` removes packages or wipes `package.json` | Running `npm install <package>` with `--legacy-peer-deps` in a broken dependency state | Always run `npm install --legacy-peer-deps` (no extra packages) first to restore node_modules, then use `npx expo install` for all Expo-specific packages. Never mix `npm install <package>` and `--legacy-peer-deps` when the dependency tree is already broken. |
+| `react@18.3.2` not found | That exact React version does not exist on npm | Use `react@18.3.1` for Expo SDK 54. Always let `npx expo install` pin React/React Native versions — do not set them manually. |
+| TurboModuleRegistry `PlatformConstants` error on device | React Native version in `package.json` doesn't match what Expo Go has compiled in | Do not manually set `react-native` version. Run `npx create-expo-app@latest` to get the correct scaffold, then use `npx expo install` for all packages. |
 | yt-dlp fails on Railway | Not installed in Docker image | Verify `Dockerfile` has `pip install yt-dlp` |
 | Railway build times out | Large Docker image (ffmpeg + yt-dlp) | Normal — first build takes 3–5 min; subsequent builds are faster |
 | Railway deploy succeeds but health check fails | `PORT` env var not set | Run `railway variables set PORT=8080` |

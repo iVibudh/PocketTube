@@ -1,6 +1,5 @@
 // App.js — Step 4.7
 // Root navigator: Login → Main (Download + Library tabs) → Player
-// Also auto-creates default playlists in Firestore on first sign-in (Step 7.1)
 
 import React, { useEffect, useState } from 'react';
 import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
@@ -20,19 +19,8 @@ import DownloadScreen from './src/screens/DownloadScreen';
 import LibraryScreen  from './src/screens/LibraryScreen';
 import PlayerScreen   from './src/screens/PlayerScreen';
 
-// ── Navigators ────────────────────────────────────────────────────────────────
-
 const Tab   = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
-
-// ── Tab icons ─────────────────────────────────────────────────────────────────
-
-const TAB_ICONS = {
-  Download: { active: '⬇️', inactive: '⬇️' },
-  Library:  { active: '📚', inactive: '📚' },
-};
-
-// ── Main tab bar (shown after login) ─────────────────────────────────────────
 
 function MainTabs() {
   return (
@@ -52,45 +40,28 @@ function MainTabs() {
         tabBarActiveTintColor:   COLORS.teal,
         tabBarInactiveTintColor: COLORS.textMuted,
         tabBarLabelStyle:        { fontSize: 11, fontWeight: '600' },
-        tabBarIcon: ({ focused, color }) => (
+        tabBarIcon: ({ focused }) => (
           <Text style={{ fontSize: 20, opacity: focused ? 1 : 0.55 }}>
-            {TAB_ICONS[route.name]?.active ?? '●'}
+            {route.name === 'Download' ? '⬇️' : '📚'}
           </Text>
         ),
       })}
     >
-      <Tab.Screen
-        name="Download"
-        component={DownloadScreen}
-        options={{ title: 'Download', tabBarLabel: 'Download' }}
-      />
-      <Tab.Screen
-        name="Library"
-        component={LibraryScreen}
-        options={{ title: 'Library', tabBarLabel: 'Library' }}
-      />
+      <Tab.Screen name="Download" component={DownloadScreen} />
+      <Tab.Screen name="Library"  component={LibraryScreen} />
     </Tab.Navigator>
   );
 }
-
-// ── Playlist initialisation (Step 7.1) ────────────────────────────────────────
 
 async function initUserPlaylists(userId) {
   try {
     const ref  = doc(db, `users/${userId}/meta`, 'playlists');
     const snap = await getDoc(ref);
     if (!snap.exists()) {
-      await setDoc(ref, {
-        lists:   PLAYLISTS,
-        created: new Date(),
-      });
+      await setDoc(ref, { lists: PLAYLISTS, created: new Date() });
     }
-  } catch (_) {
-    // Non-fatal — app still works without this
-  }
+  } catch (_) {}
 }
-
-// ── Splash / loading screen ───────────────────────────────────────────────────
 
 function SplashScreen() {
   return (
@@ -103,24 +74,17 @@ function SplashScreen() {
   );
 }
 
-// ── Root App ──────────────────────────────────────────────────────────────────
-
 export default function App() {
-  // undefined = still checking auth, null = signed out, object = signed in
   const [user, setUser] = useState(undefined);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        // Ensure default playlists exist for this user
-        await initUserPlaylists(firebaseUser.uid);
-      }
+      if (firebaseUser) await initUserPlaylists(firebaseUser.uid);
       setUser(firebaseUser ?? null);
     });
     return unsub;
   }, []);
 
-  // Show splash while Firebase resolves auth state
   if (user === undefined) return <SplashScreen />;
 
   return (
@@ -128,38 +92,31 @@ export default function App() {
       <NavigationContainer>
         <StatusBar style="light" />
         <Stack.Navigator screenOptions={{ headerShown: false }}>
-
           {user ? (
-            // ── Authenticated ──────────────────────────────────────────────
             <>
               <Stack.Screen name="Main" component={MainTabs} />
               <Stack.Screen
                 name="Player"
                 component={PlayerScreen}
                 options={{
-                  headerShown:   true,
-                  title:         'Now Playing',
-                  headerStyle:   { backgroundColor: COLORS.bg },
+                  headerShown:          true,
+                  title:                'Now Playing',
+                  headerStyle:          { backgroundColor: COLORS.bg },
                   headerTintColor:      COLORS.textPrimary,
                   headerTitleStyle:     { fontWeight: '700' },
                   headerShadowVisible:  false,
-                  // Slide up from bottom for a native player feel
-                  animation: 'slide_from_bottom',
+                  animation:            'slide_from_bottom',
                 }}
               />
             </>
           ) : (
-            // ── Not authenticated ──────────────────────────────────────────
             <Stack.Screen name="Login" component={LoginScreen} />
           )}
-
         </Stack.Navigator>
       </NavigationContainer>
     </SafeAreaProvider>
   );
 }
-
-// ── Styles ────────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   splash: {
