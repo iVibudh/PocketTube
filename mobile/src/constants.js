@@ -1,4 +1,4 @@
-export const BACKEND_URL = 'https://YOUR_RAILWAY_URL';
+export const BACKEND_URL = 'https://colors-expressions-concentrate-lopez.trycloudflare.com';
 
 export const COLORS = {
   bg:            '#0f172a',

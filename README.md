@@ -1,7 +1,7 @@
 # 🎵 PocketTube
 
 > **A personal YouTube audio & video downloader for iOS and Android**
-> Built with React Native + Expo · Railway · Firebase
+> Built with React Native + Expo · Render · Firebase
 
 ---
 
@@ -99,7 +99,7 @@ The media player is a core part of the app — both audio and video files should
 | Database / Metadata | Firebase Firestore | Free tier |
 | File Storage | Device-local only (no cloud storage) | Free |
 | Download Engine | yt-dlp + Node.js backend | Free |
-| Cloud Hosting | Railway | Free tier ($5/mo credit) |
+| Cloud Hosting | Render.com | Free tier (750 hrs/month) |
 | In-App Payments | Apple StoreKit + Google Play Billing *(future release)* | 15–30% platform cut per transaction |
 | iOS Distribution | TestFlight (personal) | $99/yr — Apple Dev account |
 
@@ -111,7 +111,7 @@ The media player is a core part of the app — both audio and video files should
 |---|---|---|
 | [Phase 1](#phase-1--firebase-setup) | Firebase project, Auth, Firestore, Storage | Day 1 |
 | [Phase 2](#phase-2--backend-server) | Node.js backend with yt-dlp + Docker | Days 1–2 |
-| [Phase 3](#phase-3--deploy-to-railway) | Deploy backend to Railway (free) | Day 2 |
+| [Phase 3](#phase-3--deploy-to-render) | Deploy backend to Render (free) | Day 2 |
 | [Phase 4](#phase-4--react-native-mobile-app) | Full mobile app — Login, Download, Library, Player | Days 3–7 |
 | [Phase 5](#phase-5--run-on-your-phone-with-expo-go) | Install Expo Go and run app on your phone | Day 8 |
 | [Phase 6](#phase-6--google-oauth-client-ids) | Wire up Google OAuth client IDs | Day 8 |
@@ -128,7 +128,7 @@ Before you start, create these free accounts and install these tools.
 | Service | URL | Purpose |
 |---|---|---|
 | Google Firebase | firebase.google.com | Auth, database, file storage |
-| Railway | railway.app | Backend hosting |
+| Render | render.com | Backend hosting |
 | Expo (EAS) | expo.dev | Mobile app builds |
 | Apple Developer | developer.apple.com | TestFlight ($99/yr) |
 | GitHub | github.com | Version control |
@@ -575,139 +575,100 @@ curl http://localhost:8080/health
 
 ---
 
-## Phase 3 — Deploy to Railway
+## Phase 3 — Deploy to Render
 
-> **Summary:** Railway hosts your Docker container with a permanent public URL and no cold starts. It builds your image directly from your local files — no Docker Hub or container registry account needed. The free tier gives you $5/month in credits, which runs this backend for ~500 hours — more than enough for personal use. Setup takes about 5 minutes.
-
----
-
-### Step 3.1 — Create a Railway Account
-
-1. Go to [railway.app](https://railway.app) → sign up (easiest with your GitHub account)
-2. No billing setup required — the free $5/month credit is applied automatically
+> **Summary:** Render hosts your Docker container with a permanent public URL. It deploys directly from your GitHub repo — push to main and Render rebuilds automatically. The free tier gives you 750 hours/month, which is more than enough for personal use. Setup takes about 10 minutes.
+>
+> **Why Render and not Railway?** Railway's shared IP ranges are flagged by YouTube as bot/datacenter traffic, causing yt-dlp to fail with "Sign in to confirm you're not a bot" errors regardless of configuration. Render's IP ranges have lower scraping history and work without cookies. See `SYSTEM_DESIGN.md` for the full decision log.
 
 ---
 
-### Step 3.2 — Install the Railway CLI and Log In
+### Step 3.1 — Create a Render Account
+
+1. Go to [render.com](https://render.com) → sign up with your GitHub account
+2. A credit card is required to unlock the free tier (you won't be charged)
+
+---
+
+### Step 3.2 — Create a New Web Service
+
+1. In the Render dashboard → click **New** → **Web Service**
+2. Connect your GitHub account if prompted → select the **PocketTube** repo
+3. Configure the service:
+   - **Name:** `pockettube-backend`
+   - **Region:** Oregon (US West) or whichever is closest to you
+   - **Branch:** `main`
+   - **Root Directory:** `backend`
+   - **Runtime:** Docker
+   - **Instance Type:** Free
+
+Render will detect your `Dockerfile` automatically.
+
+---
+
+### Step 3.3 — Set Environment Variables
+
+Before clicking Deploy, add these environment variables in the Render dashboard:
+
+| Key | Value |
+|-----|-------|
+| `PORT` | `8080` |
+| `FIREBASE_SERVICE_ACCOUNT` | Base64-encoded service account JSON (see below) |
+
+**To generate the `FIREBASE_SERVICE_ACCOUNT` value**, run this in your `backend/` folder:
 
 ```bash
-npm install -g @railway/cli
-railway login
+node -e "console.log(Buffer.from(JSON.stringify(require('./firebase-service-account.json'))).toString('base64'))"
 ```
 
-This opens a browser window to complete authentication. Once done, your terminal is connected to your Railway account.
+Copy the output (a long single-line string) and paste it as the variable value. Base64 encoding prevents newline corruption of the RSA private key.
+
+> ⚠️ Never commit `firebase-service-account.json` to git. The env var approach keeps credentials out of version control entirely.
 
 ---
 
-### Step 3.3 — Add a `.railwayignore` File
+### Step 3.4 — Deploy
 
-Railway CLI respects `.railwayignore` (not `.gitignore`) when deciding what to upload. You need `firebase-service-account.json` on the server, so create a separate ignore file that only excludes `node_modules` and the local `.env` (Railway manages env vars separately):
-
-Create `backend/.railwayignore`:
-
-```
-node_modules/
-.env
-```
-
-> ⚠️ Do **not** add `firebase-service-account.json` here. Railway needs it to authenticate with Firebase. It stays out of Git (via `.gitignore`) but must be uploaded to Railway.
+Click **Create Web Service**. Render builds your Docker image and starts the container. The first build takes 3–5 minutes (installs Node, Python, ffmpeg, and yt-dlp).
 
 ---
 
-### Step 3.4 — Initialize the Railway Project
+### Step 3.5 — Get Your Public URL
 
-From inside the `backend/` folder:
+Once deployed, Render shows your URL at the top of the service page:
+
+```
+https://pockettube-backend.onrender.com
+```
+
+This is your `BACKEND_URL`. Update `mobile/src/constants.js`:
+
+```js
+export const BACKEND_URL = 'https://pockettube-backend.onrender.com';
+```
+
+---
+
+### Step 3.6 — Test the Deployed Backend
 
 ```bash
-cd backend
-railway init
-```
-
-When prompted:
-- **Create a new project** → select this
-- **Project name** → `pockettube`
-
-Railway creates a new project in your dashboard and links it to this folder.
-
----
-
-### Step 3.5 — Set Environment Variables
-
-Set your environment variables in Railway before deploying (the `.env` file is ignored by Railway and should never be committed):
-
-```bash
-railway variables set PORT=8080
-```
-
-> `FIREBASE_BUCKET` is no longer needed — Firebase Storage is not used by the backend.
-
-You can also manage these in the Railway dashboard under **Project → Variables**.
-
----
-
-### Step 3.6 — Deploy
-
-```bash
-railway up
-```
-
-Railway uploads your files, builds the Docker image using your `Dockerfile`, and starts the container. The first build takes 3–5 minutes (it installs Node, Python, ffmpeg, and yt-dlp). Subsequent deploys are faster.
-
-You'll see a build log stream in your terminal. When it finishes you'll see:
-
-```
-✅  Deployment successful
-```
-
----
-
-### Step 3.7 — Get Your Public URL
-
-Railway doesn't generate a public URL automatically — you need to enable it once:
-
-1. Go to [railway.app](https://railway.app) → open your `pockettube` project
-2. Click your service → **Settings** tab → **Networking** section
-3. Click **Generate Domain**
-
-Your URL will look like:
-`https://pockettube.up.railway.app`
-
-This is your `BACKEND_URL`. Save it — you'll use it in Phase 4.
-
-Alternatively, generate it from the CLI:
-
-```bash
-railway domain
-```
-
----
-
-### Step 3.8 — Test the Deployed Backend
-
-```bash
-# Health check
-curl https://YOUR_RAILWAY_URL/health
+curl https://pockettube-backend.onrender.com/health
 # Expected: {"status":"ok"}
-
-# Start a download job (requires a real Firebase ID token from the mobile app)
-# The health check above is enough to confirm the backend is live at this stage
 ```
 
-> 💡 **Free Tier Reminder:** Railway's $5/month credit covers ~500 hours of a small container. For a personal app that you use a few times a week, you will stay well within the free limit. Monitor usage in the Railway dashboard under **Usage**.
+> 💡 **Free Tier Note:** Render's free web services spin down after 15 minutes of inactivity and take ~30 seconds to cold-start. For a personal app this is acceptable — the first request after idle will be slow. To prevent spin-down, set up a free uptime monitor (e.g. UptimeRobot) to ping `/health` every 10 minutes.
 
 ---
 
 ### ✅ Phase 3 Checklist
 
-- [ ] Railway account created at railway.app
-- [ ] Railway CLI installed and `railway login` completed
-- [ ] `backend/.railwayignore` created (excludes `node_modules/` and `.env` only)
-- [ ] `railway init` run inside `backend/` folder
-- [ ] Environment variable set (`PORT=8080`)
-- [ ] `railway up` deployed successfully
-- [ ] Public domain generated in Railway dashboard
-- [ ] `BACKEND_URL` saved
-- [ ] Health check and download test both return successful responses
+- [ ] Render account created and GitHub repo connected
+- [ ] Web service created with Docker runtime, root directory set to `backend/`
+- [ ] `PORT` and `FIREBASE_SERVICE_ACCOUNT` environment variables set
+- [ ] Deploy successful (green status in Render dashboard)
+- [ ] Public URL noted and saved
+- [ ] `BACKEND_URL` updated in `mobile/src/constants.js`
+- [ ] Health check returns `{"status":"ok"}`
 
 ---
 
@@ -1334,7 +1295,7 @@ onAuthStateChanged(auth, (user) => {
 | Firebase Auth | Unlimited users | $0 |
 | Firestore | 1 GB storage, 50K reads/day | $0 |
 | Firebase Storage | Not used — files stored on device | $0 |
-| Railway | $5/month free credit (~500 hrs) | $0 |
+| Render | Free tier (750 hrs/month) | $0 |
 | Expo Go | Run app on device during development | $0 |
 | **Total** | — | **$0/mo** |
 
@@ -1351,10 +1312,12 @@ onAuthStateChanged(auth, (user) => {
 | `npm install` removes packages or wipes `package.json` | Running `npm install <package>` with `--legacy-peer-deps` in a broken dependency state | Always run `npm install --legacy-peer-deps` (no extra packages) first to restore node_modules, then use `npx expo install` for all Expo-specific packages. Never mix `npm install <package>` and `--legacy-peer-deps` when the dependency tree is already broken. |
 | `react@18.3.2` not found | That exact React version does not exist on npm | Use `react@18.3.1` for Expo SDK 54. Always let `npx expo install` pin React/React Native versions — do not set them manually. |
 | TurboModuleRegistry `PlatformConstants` error on device | React Native version in `package.json` doesn't match what Expo Go has compiled in | Do not manually set `react-native` version. Run `npx create-expo-app@latest` to get the correct scaffold, then use `npx expo install` for all packages. |
-| yt-dlp fails on Railway | Not installed in Docker image | Verify `Dockerfile` has `pip install yt-dlp` |
-| Railway build times out | Large Docker image (ffmpeg + yt-dlp) | Normal — first build takes 3–5 min; subsequent builds are faster |
-| Railway deploy succeeds but health check fails | `PORT` env var not set | Run `railway variables set PORT=8080` |
-| `firebase-service-account.json` not found on server | File excluded from upload | Check `.railwayignore` — it should NOT list the service account file |
+| yt-dlp "Sign in to confirm you're not a bot" on server | Hosting provider IP range is blocklisted by YouTube | Switch to a provider with cleaner IP history (e.g. Render). If Render also gets blocked, run the backend locally with a Cloudflare Tunnel. See `SYSTEM_DESIGN.md` → Decision 3 for full analysis. |
+| yt-dlp fails — not installed in Docker image | Missing pip install in Dockerfile | Verify `Dockerfile` has `pip install yt-dlp` |
+| Render build times out | Large Docker image (ffmpeg + yt-dlp) | Normal — first build takes 3–5 min; subsequent builds are faster |
+| Render deploy succeeds but health check fails | `PORT` env var not set | Set `PORT=8080` in Render dashboard → Environment |
+| `Invalid or expired token` from backend | `FIREBASE_SERVICE_ACCOUNT` env var missing or corrupted | Generate the base64 value with `node -e "console.log(Buffer.from(JSON.stringify(require('./firebase-service-account.json'))).toString('base64'))"` and set it in Render environment variables. |
+| Google sign-in "Error 400: redirect_uri_mismatch" in Expo Go | Google rejects `exp://` redirect URIs — they're not a valid public top-level domain | This is a fundamental Expo Go limitation. Google Sign-In won't work in Expo Go regardless of what you register. Use the **⚠️ Dev Login (anonymous)** button on the login screen (visible in `__DEV__` mode only) to sign in with Firebase Anonymous Auth and test the rest of the app. Real Google Sign-In works once you create a development build (TestFlight). **Remove the dev button before releasing.** |
 | Google sign-in error | Wrong client ID | Double-check all 3 OAuth client IDs match |
 | File not found on phone | Wrong `localUri` | Log `FileSystem.documentDirectory` to verify path |
 | Audio won't play in background | Missing plist key | Add `UIBackgroundModes: ["audio"]` to `app.json` |

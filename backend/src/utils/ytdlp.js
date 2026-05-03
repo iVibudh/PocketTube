@@ -7,6 +7,11 @@ const DOWNLOADS_DIR = process.platform === 'win32'
   ? path.join(require('os').tmpdir(), 'pockettube-downloads')
   : '/tmp/downloads';
 
+// ffmpeg location — hardcoded for Windows (installed via winget)
+const FFMPEG_LOCATION = process.platform === 'win32'
+  ? 'C:\\Users\\vibud\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\\ffmpeg-8.1-full_build\\bin\\ffmpeg.exe'
+  : 'ffmpeg';
+
 /**
  * Fetches video metadata (title, channel, duration, thumbnail, available
  * resolutions, etc.) without downloading the media file.
@@ -20,8 +25,8 @@ async function getVideoInfo(url) {
       '--dump-json',
       '--no-playlist',
       '--no-download',
-      '--extractor-args', 'youtube:player_client=ios,web',
-      '--no-check-certificates',
+      '--extractor-args', 'youtube:player_client=android_vr',
+      '--ffmpeg-location', FFMPEG_LOCATION,
       url
     ]);
 
@@ -74,8 +79,8 @@ async function downloadMedia(url, format, resolution, onProgress) {
     ...formatArgs,
     '--no-playlist',
     '--newline',                // one progress line per update — easier to parse
-    '--extractor-args', 'youtube:player_client=ios,web',
-    '--no-check-certificates',
+    '--extractor-args', 'youtube:player_client=android_vr',
+    '--ffmpeg-location', FFMPEG_LOCATION,
     '-o', `${outPath}.%(ext)s`,
     url
   ];

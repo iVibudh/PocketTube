@@ -2,7 +2,7 @@
   "expo": {
     "name": "PocketTube",
     "slug": "pockettube",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -16,7 +16,9 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.pockettube.app",
       "infoPlist": {
-        "UIBackgroundModes": ["audio"],
+        "UIBackgroundModes": [
+          "audio"
+        ],
         "UIFileSharingEnabled": true,
         "LSSupportsOpeningDocumentsInPlace": true
       }
@@ -27,7 +29,10 @@
         "backgroundColor": "#0f172a"
       },
       "package": "com.pockettube.app",
-      "permissions": ["READ_EXTERNAL_STORAGE", "WRITE_EXTERNAL_STORAGE"],
+      "permissions": [
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ],
       "edgeToEdgeEnabled": true
     },
     "web": {
@@ -35,7 +40,9 @@
     },
     "scheme": "pockettube",
     "plugins": [
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-audio",
+      "expo-video"
     ]
   }
 }
