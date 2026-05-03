@@ -13,8 +13,9 @@ if (!admin.apps.length) {
   let credential;
 
   if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-    // Railway: service account JSON stored as an env variable
-    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    // Railway: service account stored as base64-encoded JSON env variable
+    const raw = Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT, 'base64').toString('utf8');
+    const serviceAccount = JSON.parse(raw);
     credential = admin.credential.cert(serviceAccount);
   } else {
     const serviceAccountPath = path.resolve(__dirname, '../../firebase-service-account.json');
