@@ -20,6 +20,8 @@ async function getVideoInfo(url) {
       '--dump-json',
       '--no-playlist',
       '--no-download',
+      '--extractor-args', 'youtube:player_client=ios,web',
+      '--no-check-certificates',
       url
     ]);
 
@@ -72,6 +74,8 @@ async function downloadMedia(url, format, resolution, onProgress) {
     ...formatArgs,
     '--no-playlist',
     '--newline',                // one progress line per update — easier to parse
+    '--extractor-args', 'youtube:player_client=ios,web',
+    '--no-check-certificates',
     '-o', `${outPath}.%(ext)s`,
     url
   ];
