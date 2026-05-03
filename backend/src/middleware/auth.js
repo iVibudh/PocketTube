@@ -18,7 +18,8 @@ async function verifyToken(req, res, next) {
     req.uid = decoded.uid;
     next();
   } catch (err) {
-    return res.status(401).json({ error: 'Invalid or expired token' });
+    console.error('[auth] verifyIdToken failed:', err.code, err.message);
+    return res.status(401).json({ error: 'Invalid or expired token', detail: err.message });
   }
 }
 
