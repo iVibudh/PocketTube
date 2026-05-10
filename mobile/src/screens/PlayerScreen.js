@@ -1,11 +1,27 @@
-import React, { useRef, useState, useCallback, useEffect } from 'react';
+/**
+ * PlayerScreen.js
+ *
+ * Audio: driven entirely by PlayerContext — the single persistent player
+ * that lives at the app root. This is what keeps audio playing when the
+ * screen locks or the user switches apps (background audio fix).
+ *
+ * Video: still uses a local useVideoPlayer (videos don't go through the
+ * audio context; video background playback is not required).
+ *
+ * New in this version:
+ *  ◆ Prev / Next track buttons (audio only)
+ *  ◆ Lock-screen / Control-Center controls via setNowPlayingInfo in context
+ */
+
+import React, { useRef, useState } from 'react';
 import {
   View, Text, Image, TouchableOpacity, StyleSheet,
-  Dimensions, PanResponder, Alert, Modal, FlatList, Pressable,
+  Dimensions, PanResponder, Modal, FlatList, Pressable,
 } from 'react-native';
-import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { usePlayerContext } from '../context/PlayerContext';
 import { COLORS } from '../constants';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -25,12 +41,7 @@ const SEEK_W   = SCREEN_W - 48;
 
 function SpeedModal({ visible, current, onSelect, onClose }) {
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.modalOverlay} onPress={onClose}>
         <Pressable style={styles.modalSheet} onPress={() => {}}>
           <Text style={styles.modalTitle}>Playback Speed</Text>
@@ -56,24 +67,37 @@ function SpeedModal({ visible, current, onSelect, onClose }) {
 }
 
 // ── Audio Player ──────────────────────────────────────────────────────────────
+// Uses the single persistent player from PlayerContext.
+// `fallbackItem` is the item from route.params used only when the context
+// hasn't propagated yet (rare timing edge case on first render).
 
-function AudioPlayer({ item }) {
+function AudioPlayer({ fallbackItem }) {
   const insets = useSafeAreaInsets();
-  const [speed, setSpeed] = useState(1.0);
-  const [speedModalVisible, setSpeedModalVisible] = useState(false);
+  const [speed, setSpeed]                   = useState(1.0);
+  const [speedModalVisible, setSpeedModal]  = useState(false);
 
-  // Audio session is configured once at app startup in App.js.
-  // No need to call setAudioModeAsync here.
-  const player = useAudioPlayer({ uri: item.localUri });
-  const status = useAudioPlayerStatus(player);
+  const {
+    currentTrack,
+    player,
+    status,
+    playNext,
+    playPrev,
+    hasNext,
+    hasPrev,
+  } = usePlayerContext();
+
+  // Use live currentTrack from context (updates on auto-advance / prev-next).
+  // Fall back to route param only on the very first render if context is cold.
+  const item = currentTrack || fallbackItem;
+  if (!item) return null;
 
   const dur    = status.duration    ?? 0;
   const pos    = status.currentTime ?? 0;
   const loaded = status.isLoaded    ?? false;
 
-  // Seek bar drag
-  const seeking    = useRef(false);
-  const seekPos    = useRef(0);
+  // ── Seek bar ────────────────────────────────────────────────────────────
+  const seeking = useRef(false);
+  const seekPos = useRef(0);
   const [seekDisp, setSeekDisp] = useState(0);
 
   const panResponder = useRef(PanResponder.create({
@@ -90,8 +114,7 @@ function AudioPlayer({ item }) {
     },
     onPanResponderRelease: () => {
       seeking.current = false;
-      const targetSec = (seekPos.current / SEEK_W) * dur;
-      player.seekTo(targetSec);
+      player.seekTo((seekPos.current / SEEK_W) * dur);
     },
   })).current;
 
@@ -103,7 +126,7 @@ function AudioPlayer({ item }) {
   const handleSelectSpeed = (s) => {
     setSpeed(s);
     player.setPlaybackRate(s);
-    setSpeedModalVisible(false);
+    setSpeedModal(false);
   };
 
   return (
@@ -112,7 +135,7 @@ function AudioPlayer({ item }) {
         visible={speedModalVisible}
         current={speed}
         onSelect={handleSelectSpeed}
-        onClose={() => setSpeedModalVisible(false)}
+        onClose={() => setSpeedModal(false)}
       />
 
       {/* Artwork */}
@@ -124,15 +147,19 @@ function AudioPlayer({ item }) {
 
       {/* Track info */}
       <View style={styles.trackInfo}>
-        <Text style={styles.trackTitle} numberOfLines={2}>{item.title || item.filename}</Text>
+        <Text style={styles.trackTitle}   numberOfLines={2}>{item.title || item.filename}</Text>
         <Text style={styles.trackChannel}>{item.channel || ''}</Text>
       </View>
 
       {/* Seek bar */}
       <View style={styles.seekSection}>
-        <View style={styles.seekTrack} {...panResponder.panHandlers} hitSlop={{ top: 12, bottom: 12 }}>
-          <View style={[styles.seekFill, { width: Math.min(displayPos, SEEK_W) }]} />
-          <View style={[styles.seekThumb, { left: Math.min(displayPos, SEEK_W) - 8 }]} />
+        <View
+          style={styles.seekTrack}
+          {...panResponder.panHandlers}
+          hitSlop={{ top: 12, bottom: 12 }}
+        >
+          <View style={[styles.seekFill,  { width: Math.min(displayPos, SEEK_W) }]} />
+          <View style={[styles.seekThumb, { left:  Math.min(displayPos, SEEK_W) - 8 }]} />
         </View>
         <View style={styles.seekTimes}>
           <Text style={styles.seekTime}>{displayTime}</Text>
@@ -140,19 +167,33 @@ function AudioPlayer({ item }) {
         </View>
       </View>
 
-      {/* Controls */}
+      {/* ── Transport controls ───────────────────────────────────────────── */}
       <View style={styles.controls}>
 
-        <TouchableOpacity style={styles.speedBtn} onPress={() => setSpeedModalVisible(true)}>
+        {/* Speed picker */}
+        <TouchableOpacity style={styles.speedBtn} onPress={() => setSpeedModal(true)}>
           <Text style={styles.speedText}>{speed}×</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.skipBtn}
-          onPress={() => player.seekTo(Math.max(0, pos - 15))}>
+        {/* ← Previous track */}
+        <TouchableOpacity
+          style={[styles.skipBtn, !hasPrev && styles.btnDisabledOpacity]}
+          onPress={playPrev}
+          disabled={!hasPrev}
+        >
+          <Text style={styles.skipIcon}>⏮</Text>
+        </TouchableOpacity>
+
+        {/* −15 s */}
+        <TouchableOpacity
+          style={styles.skipBtn}
+          onPress={() => player.seekTo(Math.max(0, pos - 15))}
+        >
           <Text style={styles.skipIcon}>↺</Text>
           <Text style={styles.skipLabel}>15</Text>
         </TouchableOpacity>
 
+        {/* Play / Pause */}
         <TouchableOpacity
           style={[styles.playBtn, !loaded && styles.playBtnDisabled]}
           onPress={() => status.playing ? player.pause() : player.play()}
@@ -161,12 +202,25 @@ function AudioPlayer({ item }) {
           <Text style={styles.playIcon}>{status.playing ? '⏸' : '▶'}</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.skipBtn}
-          onPress={() => player.seekTo(Math.min(dur, pos + 15))}>
+        {/* +15 s */}
+        <TouchableOpacity
+          style={styles.skipBtn}
+          onPress={() => player.seekTo(Math.min(dur, pos + 15))}
+        >
           <Text style={styles.skipIcon}>↻</Text>
           <Text style={styles.skipLabel}>15</Text>
         </TouchableOpacity>
 
+        {/* → Next track */}
+        <TouchableOpacity
+          style={[styles.skipBtn, !hasNext && styles.btnDisabledOpacity]}
+          onPress={playNext}
+          disabled={!hasNext}
+        >
+          <Text style={styles.skipIcon}>⏭</Text>
+        </TouchableOpacity>
+
+        {/* Playlist badge */}
         <View style={styles.playlistBadge}>
           <Text style={styles.playlistText} numberOfLines={1}>{item.playlist}</Text>
         </View>
@@ -177,11 +231,12 @@ function AudioPlayer({ item }) {
 }
 
 // ── Video Player ──────────────────────────────────────────────────────────────
+// Video doesn't go through PlayerContext — it uses a local player instance.
 
 function VideoPlayer({ item }) {
   const insets = useSafeAreaInsets();
-  const [speed, setSpeed] = useState(1.0);
-  const [speedModalVisible, setSpeedModalVisible] = useState(false);
+  const [speed, setSpeed]                  = useState(1.0);
+  const [speedModalVisible, setSpeedModal] = useState(false);
 
   const player = useVideoPlayer({ uri: item.localUri }, p => {
     p.loop = false;
@@ -190,7 +245,7 @@ function VideoPlayer({ item }) {
   const handleSelectSpeed = (s) => {
     setSpeed(s);
     player.playbackRate = s;
-    setSpeedModalVisible(false);
+    setSpeedModal(false);
   };
 
   return (
@@ -199,7 +254,7 @@ function VideoPlayer({ item }) {
         visible={speedModalVisible}
         current={speed}
         onSelect={handleSelectSpeed}
-        onClose={() => setSpeedModalVisible(false)}
+        onClose={() => setSpeedModal(false)}
       />
       <VideoView
         player={player}
@@ -208,9 +263,9 @@ function VideoPlayer({ item }) {
         contentFit="contain"
       />
       <View style={styles.videoMeta}>
-        <Text style={styles.videoTitle} numberOfLines={2}>{item.title || item.filename}</Text>
+        <Text style={styles.videoTitle}   numberOfLines={2}>{item.title || item.filename}</Text>
         <Text style={styles.videoChannel}>{item.channel || ''}</Text>
-        <TouchableOpacity style={styles.speedBtn} onPress={() => setSpeedModalVisible(true)}>
+        <TouchableOpacity style={styles.speedBtn} onPress={() => setSpeedModal(true)}>
           <Text style={styles.speedText}>{speed}×</Text>
         </TouchableOpacity>
       </View>
@@ -223,7 +278,7 @@ function VideoPlayer({ item }) {
 export default function PlayerScreen({ route }) {
   const { item } = route.params;
   return item.format === 'audio'
-    ? <AudioPlayer item={item} />
+    ? <AudioPlayer fallbackItem={item} />
     : <VideoPlayer item={item} />;
 }
 
@@ -233,7 +288,7 @@ const styles = StyleSheet.create({
   screen:       { flex: 1, backgroundColor: COLORS.bg, alignItems: 'center', paddingHorizontal: 24, paddingTop: 16 },
   video:        { width: '100%', aspectRatio: 16 / 9, backgroundColor: '#000', borderRadius: 12, marginBottom: 20 },
   videoMeta:    { width: '100%' },
-  videoTitle:   { color: COLORS.textPrimary, fontSize: 17, fontWeight: '700', marginBottom: 4 },
+  videoTitle:   { color: COLORS.textPrimary,   fontSize: 17, fontWeight: '700', marginBottom: 4 },
   videoChannel: { color: COLORS.textSecondary, fontSize: 13, marginBottom: 16 },
 
   artWrap: {
@@ -244,9 +299,9 @@ const styles = StyleSheet.create({
   artPlaceholder: { flex: 1, backgroundColor: COLORS.surface, alignItems: 'center', justifyContent: 'center' },
   artIcon:        { fontSize: 72 },
 
-  trackInfo:   { width: '100%', marginBottom: 28 },
-  trackTitle:  { color: COLORS.textPrimary, fontSize: 20, fontWeight: '700', marginBottom: 6, lineHeight: 26 },
-  trackChannel:{ color: COLORS.textSecondary, fontSize: 14 },
+  trackInfo:    { width: '100%', marginBottom: 28 },
+  trackTitle:   { color: COLORS.textPrimary,   fontSize: 20, fontWeight: '700', marginBottom: 6, lineHeight: 26 },
+  trackChannel: { color: COLORS.textSecondary, fontSize: 14 },
 
   seekSection: { width: '100%', marginBottom: 32 },
   seekTrack:   { height: 4, backgroundColor: COLORS.surface, borderRadius: 2, marginBottom: 8, position: 'relative' },
@@ -255,26 +310,31 @@ const styles = StyleSheet.create({
   seekTimes:   { flexDirection: 'row', justifyContent: 'space-between' },
   seekTime:    { color: COLORS.textMuted, fontSize: 12 },
 
-  controls:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' },
-  speedBtn:     { backgroundColor: COLORS.surface, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, minWidth: 44, alignItems: 'center' },
-  speedText:    { color: COLORS.textSecondary, fontSize: 13, fontWeight: '700' },
-  skipBtn:      { alignItems: 'center', width: 44 },
-  skipIcon:     { color: COLORS.textPrimary, fontSize: 24 },
-  skipLabel:    { color: COLORS.textMuted, fontSize: 10, marginTop: -2 },
-  playBtn:      { width: 72, height: 72, borderRadius: 36, backgroundColor: COLORS.teal, alignItems: 'center', justifyContent: 'center',
-    shadowColor: COLORS.teal, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.4, shadowRadius: 10, elevation: 8 },
-  playBtnDisabled: { backgroundColor: COLORS.surface },
-  playIcon:     { color: '#fff', fontSize: 28 },
-  playlistBadge:{ backgroundColor: COLORS.surface, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, maxWidth: 72 },
-  playlistText: { color: COLORS.textSecondary, fontSize: 11 },
+  // Controls row
+  controls:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' },
+  speedBtn:    { backgroundColor: COLORS.surface, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, minWidth: 44, alignItems: 'center' },
+  speedText:   { color: COLORS.textSecondary, fontSize: 13, fontWeight: '700' },
+  skipBtn:     { alignItems: 'center', width: 40 },
+  skipIcon:    { color: COLORS.textPrimary, fontSize: 22 },
+  skipLabel:   { color: COLORS.textMuted,   fontSize: 10, marginTop: -2 },
+  playBtn:     {
+    width: 68, height: 68, borderRadius: 34, backgroundColor: COLORS.teal,
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: COLORS.teal, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.4, shadowRadius: 10, elevation: 8,
+  },
+  playBtnDisabled:     { backgroundColor: COLORS.surface },
+  btnDisabledOpacity:  { opacity: 0.3 },
+  playIcon:            { color: '#fff', fontSize: 28 },
+  playlistBadge:       { backgroundColor: COLORS.surface, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, maxWidth: 64 },
+  playlistText:        { color: COLORS.textSecondary, fontSize: 11 },
 
   // Speed modal
-  modalOverlay:      { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
-  modalSheet:        { backgroundColor: COLORS.surface, borderRadius: 16, width: 220, paddingVertical: 8, paddingHorizontal: 0 },
-  modalTitle:        { color: COLORS.textSecondary, fontSize: 12, fontWeight: '700', textAlign: 'center', letterSpacing: 1, textTransform: 'uppercase', paddingVertical: 12 },
-  modalRow:          { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24, paddingVertical: 14 },
-  modalRowActive:    { backgroundColor: COLORS.bg },
-  modalRowText:      { color: COLORS.textPrimary, fontSize: 17 },
-  modalRowTextActive:{ color: COLORS.teal, fontWeight: '700' },
-  modalCheck:        { color: COLORS.teal, fontSize: 16 },
+  modalOverlay:       { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
+  modalSheet:         { backgroundColor: COLORS.surface, borderRadius: 16, width: 220, paddingVertical: 8 },
+  modalTitle:         { color: COLORS.textSecondary, fontSize: 12, fontWeight: '700', textAlign: 'center', letterSpacing: 1, textTransform: 'uppercase', paddingVertical: 12 },
+  modalRow:           { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24, paddingVertical: 14 },
+  modalRowActive:     { backgroundColor: COLORS.bg },
+  modalRowText:       { color: COLORS.textPrimary,   fontSize: 17 },
+  modalRowTextActive: { color: COLORS.teal, fontWeight: '700' },
+  modalCheck:         { color: COLORS.teal, fontSize: 16 },
 });

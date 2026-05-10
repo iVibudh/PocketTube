@@ -8,6 +8,7 @@ import * as FileSystem from 'expo-file-system';
 import { useNavigation } from '@react-navigation/native';
 import { auth, db } from '../firebase';
 import { COLORS, PLAYLISTS } from '../constants';
+import { usePlayerContext } from '../context/PlayerContext';
 
 function formatDuration(seconds) {
   if (!seconds) return '';
@@ -48,6 +49,7 @@ function LibraryItem({ item, onPress, onDelete }) {
 
 export default function LibraryScreen() {
   const navigation            = useNavigation();
+  const { playTrack }         = usePlayerContext();
   const [filter, setFilter]   = useState('All');
   const [items,  setItems]    = useState([]);
   const [loading, setLoading] = useState(true);
@@ -135,7 +137,15 @@ export default function LibraryScreen() {
           data={items} keyExtractor={i => i.id}
           renderItem={({ item }) => (
             <LibraryItem item={item}
-              onPress={() => navigation.navigate('Player', { item })}
+              onPress={() => {
+                // For audio, load the full list into the queue so
+                // Prev / Next and auto-advance work across all tracks.
+                if (item.format === 'audio') {
+                  const audioItems = items.filter(i => i.format === 'audio');
+                  playTrack(item, audioItems);
+                }
+                navigation.navigate('Player', { item });
+              }}
               onDelete={() => handleDelete(item)} />
           )}
           ListEmptyComponent={renderEmpty}
@@ -160,7 +170,8 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: COLORS.teal, borderColor: COLORS.teal },
   chipText: { color: COLORS.textSecondary, fontSize: 13 },
   chipTextActive: { color: '#fff', fontWeight: '600' },
-  listContent: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 32 },
+  // Extra bottom padding so the last item isn't hidden behind the MiniPlayer (64 px) + tab bar (60 px)
+  listContent: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 140 },
   emptyContainer: { flex: 1 },
   item: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.surface, borderRadius: 12, marginBottom: 10, padding: 12, gap: 12 },
   thumbWrap: { position: 'relative', width: THUMB_W, height: THUMB_H },

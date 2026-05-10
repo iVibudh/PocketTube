@@ -1,4 +1,4 @@
-// App.js — Step 4.7
+// App.js
 // Root navigator: Login → Main (Download + Library tabs) → Player
 
 import React, { useEffect, useState } from 'react';
@@ -11,18 +11,13 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
-import { setAudioModeAsync } from 'expo-audio';
-
 import { auth, db } from './src/firebase';
 import { COLORS, PLAYLISTS } from './src/constants';
 
-// Configure the global audio session once at app startup.
-// Must happen before any useAudioPlayer is created so that
-// background playback and silent-mode work correctly on iOS.
-setAudioModeAsync({
-  playsInSilentModeIOS:    true,
-  staysActiveInBackground: true,
-}).catch(() => {});
+// Audio session config has moved into PlayerContextProvider so the session
+// is set up in the same lifecycle as the persistent player.
+import { PlayerContextProvider } from './src/context/PlayerContext';
+import MiniPlayer from './src/components/MiniPlayer';
 
 import LoginScreen    from './src/screens/LoginScreen';
 import DownloadScreen from './src/screens/DownloadScreen';
@@ -32,34 +27,42 @@ import PlayerScreen   from './src/screens/PlayerScreen';
 const Tab   = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
+// MainTabs wraps the two tab screens AND the floating MiniPlayer.
+// The MiniPlayer is absolutely positioned above the tab bar so it is
+// naturally hidden when the full PlayerScreen is pushed on the stack.
 function MainTabs() {
   return (
-    <Tab.Navigator
-      screenOptions={({ route }) => ({
-        headerStyle:            { backgroundColor: COLORS.bg },
-        headerTintColor:        COLORS.textPrimary,
-        headerTitleStyle:       { fontWeight: '700', fontSize: 18 },
-        headerShadowVisible:    false,
-        tabBarStyle: {
-          backgroundColor: COLORS.bg,
-          borderTopColor:  COLORS.surface,
-          borderTopWidth:  1,
-          height:          60,
-          paddingBottom:   8,
-        },
-        tabBarActiveTintColor:   COLORS.teal,
-        tabBarInactiveTintColor: COLORS.textMuted,
-        tabBarLabelStyle:        { fontSize: 11, fontWeight: '600' },
-        tabBarIcon: ({ focused }) => (
-          <Text style={{ fontSize: 20, opacity: focused ? 1 : 0.55 }}>
-            {route.name === 'Download' ? '⬇️' : '📚'}
-          </Text>
-        ),
-      })}
-    >
-      <Tab.Screen name="Download" component={DownloadScreen} />
-      <Tab.Screen name="Library"  component={LibraryScreen} />
-    </Tab.Navigator>
+    <View style={{ flex: 1 }}>
+      <Tab.Navigator
+        screenOptions={({ route }) => ({
+          headerStyle:            { backgroundColor: COLORS.bg },
+          headerTintColor:        COLORS.textPrimary,
+          headerTitleStyle:       { fontWeight: '700', fontSize: 18 },
+          headerShadowVisible:    false,
+          tabBarStyle: {
+            backgroundColor: COLORS.bg,
+            borderTopColor:  COLORS.surface,
+            borderTopWidth:  1,
+            height:          60,
+            paddingBottom:   8,
+          },
+          tabBarActiveTintColor:   COLORS.teal,
+          tabBarInactiveTintColor: COLORS.textMuted,
+          tabBarLabelStyle:        { fontSize: 11, fontWeight: '600' },
+          tabBarIcon: ({ focused }) => (
+            <Text style={{ fontSize: 20, opacity: focused ? 1 : 0.55 }}>
+              {route.name === 'Download' ? '⬇️' : '📚'}
+            </Text>
+          ),
+        })}
+      >
+        <Tab.Screen name="Download" component={DownloadScreen} />
+        <Tab.Screen name="Library"  component={LibraryScreen} />
+      </Tab.Navigator>
+
+      {/* Floats above the tab bar; only visible when a track is loaded */}
+      <MiniPlayer />
+    </View>
   );
 }
 
@@ -98,42 +101,46 @@ export default function App() {
   if (user === undefined) return <SplashScreen />;
 
   return (
-    <SafeAreaProvider>
-      <NavigationContainer>
-        <StatusBar style="light" />
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
-          {user ? (
-            <>
-              <Stack.Screen name="Main" component={MainTabs} />
-              <Stack.Screen
-                name="Player"
-                component={PlayerScreen}
-                options={{
-                  headerShown:          true,
-                  title:                'Now Playing',
-                  headerStyle:          { backgroundColor: COLORS.bg },
-                  headerTintColor:      COLORS.textPrimary,
-                  headerTitleStyle:     { fontWeight: '700' },
-                  headerShadowVisible:  false,
-                  animation:            'slide_from_bottom',
-                }}
-              />
-            </>
-          ) : (
-            <Stack.Screen name="Login" component={LoginScreen} />
-          )}
-        </Stack.Navigator>
-      </NavigationContainer>
-    </SafeAreaProvider>
+    // PlayerContextProvider wraps everything so the persistent audio player
+    // is available to all screens (PlayerScreen, LibraryScreen, MiniPlayer).
+    <PlayerContextProvider>
+      <SafeAreaProvider>
+        <NavigationContainer>
+          <StatusBar style="light" />
+          <Stack.Navigator screenOptions={{ headerShown: false }}>
+            {user ? (
+              <>
+                <Stack.Screen name="Main"   component={MainTabs} />
+                <Stack.Screen
+                  name="Player"
+                  component={PlayerScreen}
+                  options={{
+                    headerShown:          true,
+                    title:                'Now Playing',
+                    headerStyle:          { backgroundColor: COLORS.bg },
+                    headerTintColor:      COLORS.textPrimary,
+                    headerTitleStyle:     { fontWeight: '700' },
+                    headerShadowVisible:  false,
+                    animation:            'slide_from_bottom',
+                  }}
+                />
+              </>
+            ) : (
+              <Stack.Screen name="Login" component={LoginScreen} />
+            )}
+          </Stack.Navigator>
+        </NavigationContainer>
+      </SafeAreaProvider>
+    </PlayerContextProvider>
   );
 }
 
 const styles = StyleSheet.create({
   splash: {
-    flex: 1,
+    flex:            1,
     backgroundColor: COLORS.bg,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems:      'center',
+    justifyContent:  'center',
   },
   splashLogo:  { fontSize: 64, marginBottom: 12 },
   splashTitle: { fontSize: 36, color: COLORS.teal, fontWeight: 'bold', letterSpacing: 1 },

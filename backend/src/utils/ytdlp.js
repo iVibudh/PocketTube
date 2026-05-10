@@ -13,6 +13,24 @@ const FFMPEG_LOCATION = process.platform === 'win32'
   : 'ffmpeg';
 
 /**
+ * _cleanPartials(dir, id)
+ *
+ * Deletes all files in `dir` whose name begins with `id`.
+ * Called after a yt-dlp failure to remove partial / intermediate files
+ * (e.g. .part, .ytdl, half-merged .mp4) so they don't accumulate in /tmp.
+ * Errors are silently swallowed — cleanup failure must not mask the
+ * original download error.
+ */
+function _cleanPartials(dir, id) {
+  try {
+    const entries = fs.readdirSync(dir).filter(f => f.startsWith(id));
+    for (const entry of entries) {
+      try { fs.unlinkSync(path.join(dir, entry)); } catch (_) {}
+    }
+  } catch (_) {}
+}
+
+/**
  * Fetches video metadata (title, channel, duration, thumbnail, available
  * resolutions, etc.) without downloading the media file.
  *
@@ -67,17 +85,33 @@ async function downloadMedia(url, format, resolution, onProgress) {
   if (format === 'audio') {
     formatArgs = ['-x', '--audio-format', 'mp3', '--audio-quality', '0'];
   } else {
-    // Build a format selector that respects the requested resolution cap.
-    // --merge-output-format mp4 forces ffmpeg to always produce an mp4
-    // container, preventing yt-dlp from silently falling back to .mkv
-    // (which happens when stream codecs aren't natively mp4-compatible).
-    // The format selector prefers a pre-muxed mp4 first (no merge step),
-    // then falls back to separate best video+audio streams for merging.
-    const heightCap = resolution ? `[height<=${resolution}]` : '';
+    // ── iOS-compatible video format selection ──────────────────────────────
+    //
+    // Root cause of the "black screen / audio only" bug:
+    // YouTube's best-quality streams are VP9 (WebM) or AV1, neither of
+    // which iOS hardware-decodes in expo-video. We must force H.264 (AVC).
+    //
+    // Strategy (in preference order):
+    //  1. Best H.264 mp4 video  + m4a audio  → merge into mp4  (ideal)
+    //  2. Best H.264 video      + any audio  → merge into mp4  (fallback)
+    //  3. Best pre-muxed mp4 at the cap      → no merge needed (last resort)
+    //
+    // vcodec^=avc  matches "avc1", "avc1.64001f", etc. (all H.264 variants)
+    //
+    // --postprocessor-args adds two ffmpeg flags:
+    //   -movflags +faststart  moves the moov atom to the file header so iOS
+    //                         can start reading metadata before the full
+    //                         file is downloaded / memory-mapped.
+    //   -c:a aac              re-encodes audio to AAC if it isn't already,
+    //                         ensuring the container is fully iOS-compatible.
+    const cap = resolution ? `[height<=${resolution}]` : '';
     formatArgs = [
       '-f',
-      `bestvideo${heightCap}[ext=mp4]+bestaudio[ext=m4a]/bestvideo${heightCap}+bestaudio/best${heightCap}[ext=mp4]/best${heightCap}`,
+      `bestvideo${cap}[ext=mp4][vcodec^=avc]+bestaudio[ext=m4a]` +
+      `/bestvideo${cap}[vcodec^=avc]+bestaudio` +
+      `/best${cap}[ext=mp4]`,
       '--merge-output-format', 'mp4',
+      '--postprocessor-args', 'ffmpeg:-movflags +faststart -c:a aac',
     ];
   }
 
@@ -107,7 +141,12 @@ async function downloadMedia(url, format, resolution, onProgress) {
     proc.stderr.on('data', d => { stderr += d.toString(); });
 
     proc.on('close', code => {
-      if (code !== 0) return reject(new Error(stderr || `yt-dlp exited with code ${code}`));
+      if (code !== 0) {
+        // Clean up any partial / intermediate files left by yt-dlp or ffmpeg
+        // before rejecting so they don't accumulate in /tmp.
+        _cleanPartials(DOWNLOADS_DIR, id);
+        return reject(new Error(stderr || `yt-dlp exited with code ${code}`));
+      }
 
       // Glob for the actual output file — don't assume the extension.
       // yt-dlp normally honours --merge-output-format mp4, but if it
@@ -121,7 +160,10 @@ async function downloadMedia(url, format, resolution, onProgress) {
       resolve(path.join(DOWNLOADS_DIR, files[0]));
     });
 
-    proc.on('error', err => reject(new Error(`yt-dlp not found: ${err.message}`)));
+    proc.on('error', err => {
+      _cleanPartials(DOWNLOADS_DIR, id);
+      reject(new Error(`yt-dlp not found: ${err.message}`));
+    });
   });
 }
 

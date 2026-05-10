@@ -44,20 +44,19 @@ This repo is a learning project. It covers React Native, Expo, Google OAuth, Fir
 
 ## 🐞 Known Issues
 
-These bugs have been investigated and code changes applied, but the fixes did **not resolve the problems** on device. Further debugging is needed.
+| Bug | Platform | What happens | Fix applied in v1.2.0 | Status |
+|---|---|---|---|---|
+| Audio stops on screen lock | iOS only | Background playback cuts out when screen locks or user switches apps | Moved `useAudioPlayer` into persistent `PlayerContext`; `staysActiveInBackground: true` set | ❌ Still broken on iOS — deferred to v1.4 |
+| Video shows no picture | iOS only | Downloaded video plays audio only — black screen | Forced H.264/AVC codec + `-movflags +faststart` in yt-dlp format selector | ❌ Still broken on iOS — deferred to v1.4 |
+| Video shows no picture | Android | Downloaded video plays audio only — black screen | Same H.264/AVC + faststart fix | ✅ Resolved on Android in v1.2.0 |
 
-| Bug | What happens | What was tried | Status |
-|---|---|---|---|
-| Audio stops on screen lock | Background playback cuts out when screen locks or app switches | Moved `setAudioModeAsync` to `App.js` root so it runs before any player is created | ❌ Still broken |
-| Video shows no picture | Downloaded video plays audio only — black screen | Added `--merge-output-format mp4` to yt-dlp args + glob-based output file detection | ❌ Still broken |
-
-> Both bugs are carried forward for deeper investigation. Next steps: check expo-audio SDK 54 background audio requirements, and add yt-dlp `--verbose` logging to inspect which video streams are actually being selected and merged.
+> **iOS-specific issues are deferred to v1.4.** Both bugs work correctly on Android after the v1.2.0 fixes. The iOS problems likely require deeper investigation into how `expo-audio`/`expo-video` interact with the iOS audio session and AVFoundation on a real device build. Expo Go's sandboxed environment may be masking the root cause.
 
 ---
 
 ## ✅ Master Checklist
 
-> **Current version: 1.1.0** · Targeting: **1.2.0**
+> **Current version: 1.1.0** · Targeting: **1.2.0** · Planned: **1.3.0** · Future: **1.4.0**
 
 ### v1.0.0 — Initial Build
 
@@ -83,27 +82,48 @@ These bugs have been investigated and code changes applied, but the fixes did **
 ### v1.2.0 — Planned
 
 **Sprint 1 — Core Playback Fixes 🔴**
-- [ ] Fix audio background playback — stops when screen locks or user switches apps
-- [ ] Fix video playback — downloaded video shows no picture, audio only
-- [ ] Fix Firestore index error — filtering by playlist crashes with `failed-precondition`
+- [~] Fix audio background playback — `PlayerContext` architecture in place; works on Android, **still broken on iOS** (deferred to v1.4)
+- [~] Fix video playback — H.264/AVC + faststart fix applied; works on Android, **still broken on iOS** (deferred to v1.4)
+- [x] Fix Firestore index error — filtering by playlist crashes with `failed-precondition`
 
 **Sprint 2 — Remove Local Desktop Dependency 🟡**
 - [x] Permanent tunnel URL via ngrok free static domain — `constants.js` never needs updating after a restart
 
 **Sprint 3 — UX Improvements 🟠**
 - [x] Speed selector: replaced cycle button with a modal list (jump directly to any speed)
-- [ ] Google Sign-In via EAS Build + TestFlight — removes Expo Go + `npx expo start` dependency
 - [x] Empty library state — shows 📭 guidance when no files downloaded yet (already implemented in LibraryScreen.js)
 
 **Sprint 3b — Audio Player Completeness 🟠**
-- [ ] Lock screen / Control Center controls (iOS Now Playing widget)
-- [ ] Mini-player bar — persistent at the bottom while browsing the library
-- [ ] Previous / Next buttons in the audio player
+- [x] Lock screen / Control Center controls — best-effort via `player.setNowPlayingInfo` in `PlayerContext`; audio session stays active in background
+- [x] Mini-player bar — persistent `MiniPlayer` component floats above tab bar; shows progress bar, play/pause, and next-track button
+- [x] Previous / Next buttons in the audio player — driven by queue in `PlayerContext`; auto-advance on track end also wired up
 
 **Sprint 4 — Stability & Polish 🟢**
-- [ ] Partial download cleanup — delete incomplete files when a download fails midway
+- [x] Partial download cleanup — `_cleanPartials()` in `ytdlp.js` deletes `.part` / intermediate files on any yt-dlp failure
 - [ ] Add troubleshooting entries: Firestore index fix, ffmpeg PATH on Windows, ngrok static domain setup
 - [ ] Commit all v1.1.0 changes to git (`git add -A && git commit -m "v1.1.0: downloads working, local backend, anonymous auth"`)
+
+### v1.3.0 — Distribution & Monetisation
+
+**Sprint 1 — Real Builds 🔴**
+- [ ] Google Sign-In via EAS Build — removes Expo Go + `npx expo start` dependency, fixes `redirect_uri_mismatch`
+- [ ] Remove anonymous dev login button before release (`__DEV__` guard only — must not ship to users)
+- [ ] iOS build distributed via TestFlight
+- [ ] Android build distributed via Google Play internal track
+
+**Sprint 2 — Payments & Plans 🟡**
+- [ ] Implement Free plan enforcement — cap at 10 stored files, prompt to delete or upgrade
+- [ ] Implement Pro plan — one-time $9.99 purchase, no file limit, 10 downloads/day cap
+- [ ] iOS in-app purchase via Apple StoreKit
+- [ ] Android in-app purchase via Google Play Billing
+- [ ] Plan status verified in Firestore on app launch
+
+### v1.4.0 — iOS Platform Fixes
+
+**iOS-specific bugs that were not resolved by the v1.2.0 fixes. Require deeper investigation on a real device build (not Expo Go).**
+
+- [ ] Fix background audio on iOS — investigate `expo-audio` AVAudioSession category interaction with Expo Go; likely needs a custom EAS build to test properly
+- [ ] Fix video playback on iOS — investigate `expo-video` / AVFoundation codec compatibility; check whether H.265/HEVC or container issues are the root cause on device
 
 ---
 
@@ -143,11 +163,12 @@ These are not bugs — they are current constraints of the v1.1.0 build. Each on
 
 | Limitation | Status | Planned Fix |
 |---|---|---|
-| Google Sign-In blocked in Expo Go | Google rejects `exp://` redirect URIs | Sprint 3.2 — EAS Build + TestFlight |
-| Video player shows audio only, no picture | yt-dlp format merge issue | Sprint 1.2 |
-| Audio stops when screen locks or app switches | `setAudioModeAsync` config | Sprint 1.1 |
-| No lock screen / Control Center controls | NowPlayingInfo not wired up | Sprint 3b |
-| Speed selector cycles one-by-one | No modal picker yet | Sprint 3.1 |
+| Google Sign-In blocked in Expo Go | Google rejects `exp://` redirect URIs | v1.3.0 — EAS Build + TestFlight |
+| Video player shows audio only (iOS) | iOS AVFoundation / expo-video codec issue | v1.4 investigation |
+| Audio stops on screen lock (iOS) | iOS audio session behaviour in Expo Go | v1.4 investigation |
+| ~~Video player shows audio only (Android)~~ | ~~yt-dlp format merge issue~~ | ✅ Fixed in v1.2.0 — H.264 + faststart |
+| ~~No lock screen / Control Center controls~~ | ~~NowPlayingInfo not wired up~~ | ✅ Fixed in v1.2.0 — wired via PlayerContext |
+| ~~Speed selector cycles one-by-one~~ | ~~No modal picker yet~~ | ✅ Fixed in v1.1.0 |
 | Filtering by playlist crashes the Library screen | Missing Firestore composite index | Sprint 1.3 |
 | Backend requires your computer to be on and running | Local desktop dependency | Future VPS migration |
 | ~~Tunnel URL changes every restart~~ | ~~Ad-hoc Cloudflare tunnel~~ | ✅ Fixed in Sprint 2 — switched to ngrok free static domain |
