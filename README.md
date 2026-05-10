@@ -18,13 +18,167 @@ Downloading YouTube content may violate [YouTube's Terms of Service (Section 5)]
 
 ---
 
+## 🔒 Security Notes
+
+These things must stay private — treat them like passwords:
+
+| What | Why it's sensitive | Where it lives |
+|---|---|---|
+| `firebase-service-account.json` | Contains your RSA private key — anyone with it can impersonate your backend | `backend/` only — **never commit to git** (already in `.gitignore`) |
+| `FIREBASE_SERVICE_ACCOUNT` env var | Base64 of the same private key | Render / local `.env` only |
+| `.env` files | Contains local secrets | Never commit — in `.gitignore` |
+| ngrok tunnel URL | Anyone who knows it can hit your backend without auth | Don't share publicly |
+| Backend URL (constants.js) | Same as above | Keep the repo private or avoid hardcoding production URLs |
+
+---
+
 ## 📖 Background
 
 I wanted a simple way to save YouTube videos and audio to my phone for offline use — things like language learning lessons, focus music playlists, podcasts, and sleep sounds. No existing app did exactly what I wanted without ads, paywalls, or sketchy permissions.
 
 So I built **PocketTube**: a clean personal app where I paste a YouTube link, choose the format and quality I want, and the file downloads straight to my phone — ready to play offline, no internet needed.
 
-This repo is a learning project. It covers React Native, Expo, Google OAuth, Firebase, Docker, Railway, and iOS distribution via TestFlight — all using free tiers where possible.
+This repo is a learning project. It covers React Native, Expo, Google OAuth, Firebase, Docker, ngrok, and iOS distribution via TestFlight — all using free tiers where possible.
+
+---
+
+## 🐞 Known Issues
+
+These bugs have been investigated and code changes applied, but the fixes did **not resolve the problems** on device. Further debugging is needed.
+
+| Bug | What happens | What was tried | Status |
+|---|---|---|---|
+| Audio stops on screen lock | Background playback cuts out when screen locks or app switches | Moved `setAudioModeAsync` to `App.js` root so it runs before any player is created | ❌ Still broken |
+| Video shows no picture | Downloaded video plays audio only — black screen | Added `--merge-output-format mp4` to yt-dlp args + glob-based output file detection | ❌ Still broken |
+
+> Both bugs are carried forward for deeper investigation. Next steps: check expo-audio SDK 54 background audio requirements, and add yt-dlp `--verbose` logging to inspect which video streams are actually being selected and merged.
+
+---
+
+## ✅ Master Checklist
+
+> **Current version: 1.1.0** · Targeting: **1.2.0**
+
+### v1.0.0 — Initial Build
+
+- [x] Firebase project setup (Auth, Firestore)
+- [x] Node.js backend with yt-dlp + ffmpeg (Docker)
+- [x] Deploy backend to Render
+- [x] React Native mobile app (Login, Download, Library, Player screens)
+- [x] Expo Go setup — run on iPhone via QR code
+- [x] Google OAuth client IDs configured (Web, iOS)
+- [x] Playlist system — 7 default categories
+
+### v1.1.0 — Downloads Working *(current)*
+
+- [x] Anonymous auth dev login button (`__DEV__` only, remove before TestFlight)
+- [x] Fixed Firebase Admin token verification — base64 env var approach for service account
+- [x] Switched yt-dlp to `android_vr` player client (bypasses YouTube bot detection JS challenge)
+- [x] Local backend + ngrok tunnel workaround (Railway and Render IPs are bot-blocked by YouTube; switched from Cloudflare ad-hoc tunnel to ngrok free static domain in Sprint 2)
+- [x] Fixed ffmpeg path on Windows (hardcoded path to winget-installed binary)
+- [x] Fixed `expo-file-system/legacy` import (SDK 54 deprecation of `downloadAsync`)
+- [x] Audio downloads working end-to-end
+- [x] `app.json` version bumped to 1.1.0, `UIBackgroundModes: ["audio"]` confirmed present
+
+### v1.2.0 — Planned
+
+**Sprint 1 — Core Playback Fixes 🔴**
+- [ ] Fix audio background playback — stops when screen locks or user switches apps
+- [ ] Fix video playback — downloaded video shows no picture, audio only
+- [ ] Fix Firestore index error — filtering by playlist crashes with `failed-precondition`
+
+**Sprint 2 — Remove Local Desktop Dependency 🟡**
+- [x] Permanent tunnel URL via ngrok free static domain — `constants.js` never needs updating after a restart
+
+**Sprint 3 — UX Improvements 🟠**
+- [x] Speed selector: replaced cycle button with a modal list (jump directly to any speed)
+- [ ] Google Sign-In via EAS Build + TestFlight — removes Expo Go + `npx expo start` dependency
+- [x] Empty library state — shows 📭 guidance when no files downloaded yet (already implemented in LibraryScreen.js)
+
+**Sprint 3b — Audio Player Completeness 🟠**
+- [ ] Lock screen / Control Center controls (iOS Now Playing widget)
+- [ ] Mini-player bar — persistent at the bottom while browsing the library
+- [ ] Previous / Next buttons in the audio player
+
+**Sprint 4 — Stability & Polish 🟢**
+- [ ] Partial download cleanup — delete incomplete files when a download fails midway
+- [ ] Add troubleshooting entries: Firestore index fix, ffmpeg PATH on Windows, ngrok static domain setup
+- [ ] Commit all v1.1.0 changes to git (`git add -A && git commit -m "v1.1.0: downloads working, local backend, anonymous auth"`)
+
+---
+
+## 🚀 Daily Startup Guide
+
+> **v1.1.0 requires 3 terminals every session.** Sprint 2 is complete — the ngrok URL is now permanent so no more copy-pasting. Will reduce to 0 terminals once Sprint 3.2 (TestFlight build) is done.
+
+**Step 1 — Start the backend** (Terminal 1, inside `backend/`)
+```bash
+cd path/to/PocketTube/backend
+node src/index.js
+```
+You should see: `PocketTube backend running on port 8080`
+
+**Step 2 — Start the ngrok tunnel** (Terminal 2, anywhere)
+```bash
+ngrok http --domain=tropics-proton-unbitten.ngrok-free.dev 8080
+```
+Wait a few seconds until you see `Forwarding` in the output. The URL is always the same — no copy-paste needed.
+
+> ✅ **Sprint 2 complete — this URL never changes.** `constants.js` is already set and never needs updating again.
+
+**Step 3 — Start Expo** (Terminal 3, inside `mobile/`)
+```bash
+cd path/to/PocketTube/mobile
+npx expo start
+```
+Scan the QR code with Expo Go on your iPhone.
+
+> 💡 **Port conflict?** If the backend fails to start with `EADDRINUSE`, run `npx kill-port 8080` first.
+
+---
+
+## ⚠️ Known Limitations
+
+These are not bugs — they are current constraints of the v1.1.0 build. Each one has a fix planned in v1.2.0.
+
+| Limitation | Status | Planned Fix |
+|---|---|---|
+| Google Sign-In blocked in Expo Go | Google rejects `exp://` redirect URIs | Sprint 3.2 — EAS Build + TestFlight |
+| Video player shows audio only, no picture | yt-dlp format merge issue | Sprint 1.2 |
+| Audio stops when screen locks or app switches | `setAudioModeAsync` config | Sprint 1.1 |
+| No lock screen / Control Center controls | NowPlayingInfo not wired up | Sprint 3b |
+| Speed selector cycles one-by-one | No modal picker yet | Sprint 3.1 |
+| Filtering by playlist crashes the Library screen | Missing Firestore composite index | Sprint 1.3 |
+| Backend requires your computer to be on and running | Local desktop dependency | Future VPS migration |
+| ~~Tunnel URL changes every restart~~ | ~~Ad-hoc Cloudflare tunnel~~ | ✅ Fixed in Sprint 2 — switched to ngrok free static domain |
+| No mini-player — leaving Player screen stops audio | State not lifted to context | Sprint 3b |
+
+---
+
+## 📋 Changelog
+
+### v1.2.0 *(in progress — 2026-05-10)*
+- Switched tunnel from Cloudflare ad-hoc to ngrok free static domain — `constants.js` URL is now permanent
+- Fixed Firestore `failed-precondition` crash when filtering Library by playlist (client-side sort workaround)
+- Applied fixes for background audio and video picture (under investigation — not yet resolved on device)
+
+### v1.1.0 *(2026-05-03)*
+- Downloads working end-to-end (audio confirmed)
+- Switched to local backend + Cloudflare ad-hoc tunnel (Railway and Render IPs blocked by YouTube)
+- Switched yt-dlp player client to `android_vr` to bypass JS challenge
+- Fixed Firebase Admin token verification — base64 env var for service account
+- Fixed `expo-file-system/legacy` import (SDK 54 deprecation)
+- Fixed ffmpeg path on Windows (hardcoded winget install path)
+- Added anonymous auth dev login button (visible in `__DEV__` mode only)
+- Bumped version to 1.1.0 in `app.json` and `LoginScreen.js`
+
+### v1.0.0 *(2026-04-28)*
+- Initial build: Firebase Auth + Firestore, Node.js backend with yt-dlp + Docker
+- React Native mobile app with Login, Download, Library, and Player screens
+- Expo Go setup for running on iPhone without a build step
+- Google OAuth client IDs configured (Web + iOS)
+- 7-category playlist system
+- Async job architecture: download → poll → fetch → save locally
 
 ---
 
@@ -105,6 +259,53 @@ The media player is a core part of the app — both audio and video files should
 
 ---
 
+## 🏛️ Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    iPhone (Expo Go)                      │
+│                                                          │
+│  LoginScreen → Google/Anonymous Auth via Firebase        │
+│  DownloadScreen → paste URL → pick format                │
+│  LibraryScreen → browse local files by playlist          │
+│  PlayerScreen → play audio/video from device storage     │
+└──────────────────────┬──────────────────────────────────┘
+                       │ HTTPS (Firebase ID token in header)
+                       ▼
+┌─────────────────────────────────────────────────────────┐
+│           Cloudflare Tunnel (trycloudflare.com)          │
+│  Proxies HTTPS traffic to localhost:8080 on your PC      │
+└──────────────────────┬──────────────────────────────────┘
+                       │ localhost
+                       ▼
+┌─────────────────────────────────────────────────────────┐
+│              Local Backend (Node.js / Express)           │
+│                                                          │
+│  POST /api/info     → yt-dlp --dump-json (metadata)      │
+│  POST /api/download → yt-dlp download job (async)        │
+│  GET  /api/status   → poll job progress                  │
+│  GET  /api/file     → stream file → phone → save locally │
+│                                                          │
+│  Auth middleware: verifies Firebase ID token via          │
+│  Firebase Admin SDK (FIREBASE_SERVICE_ACCOUNT env var)   │
+└──────────────────────┬──────────────────────────────────┘
+                       │
+                 ┌─────┴─────┐
+                 ▼           ▼
+            yt-dlp        ffmpeg
+         (download)      (convert)
+```
+
+**Key design decisions:**
+- No cloud file storage — files go straight from backend `/tmp` to the phone's local storage
+- Async job pattern — download starts immediately, mobile polls for progress, fetches when done
+- Local backend only — cloud hosting IPs (Railway, Render) are bot-blocked by YouTube
+- Firebase used only for Auth token verification on the backend; all media metadata is in Firestore on the client side
+
+> See `SYSTEM_DESIGN.md` for a full interview-style breakdown with ADRs for each decision.
+
+---
+
 ## 🗺️ Action Plan
 
 | Phase | Goal | Est. Time |
@@ -145,6 +346,19 @@ Before you start, create these free accounts and install these tools.
 - **VS Code** or any code editor
 
 > 💡 Create a folder called `pockettube/` on your Desktop. Everything lives inside it.
+
+### Environment Variables Reference
+
+All configuration values used across the project in one place:
+
+| Variable | Location | Purpose | How to get it |
+|---|---|---|---|
+| `PORT` | `backend/.env` | Port the Express server listens on | Set to `8080` |
+| `FIREBASE_SERVICE_ACCOUNT` | `backend/.env` / Render env | Base64-encoded Firebase service account JSON | Run: `node -e "console.log(Buffer.from(JSON.stringify(require('./firebase-service-account.json'))).toString('base64'))"` in `backend/` |
+| `BACKEND_URL` | `mobile/src/constants.js` | URL the mobile app sends requests to | Your Cloudflare Tunnel URL (changes each restart until Sprint 2) |
+| `EXPO_CLIENT_ID` | `mobile/src/screens/LoginScreen.js` | Google OAuth web client ID | Google Cloud Console → APIs & Services → Credentials |
+| `IOS_CLIENT_ID` | `mobile/src/screens/LoginScreen.js` | Google OAuth iOS client ID | Same as above |
+| `ANDROID_CLIENT_ID` | `mobile/src/screens/LoginScreen.js` | Google OAuth Android client ID | Same as above (not yet configured) |
 
 ### Project Structure
 
@@ -274,7 +488,7 @@ npm install express cors firebase-admin uuid
 npm install --save-dev nodemon
 ```
 
-Your folder structure:
+Your backend folder structure:
 
 ```
 backend/
@@ -691,6 +905,26 @@ npx expo install @react-native-async-storage/async-storage
 npm install firebase @react-navigation/native @react-navigation/bottom-tabs
 npm install @react-navigation/native-stack
 npx expo install react-native-screens react-native-safe-area-context
+```
+
+Your mobile folder structure:
+
+```
+mobile/
+  App.js                          ← root navigator + auth state listener
+  app.json                        ← Expo config (version, permissions, scheme)
+  src/
+    firebase.js                   ← Firebase app init (auth + Firestore)
+    constants.js                  ← BACKEND_URL and shared color palette
+    screens/
+      LoginScreen.js              ← Google OAuth + anonymous dev login
+      DownloadScreen.js           ← paste URL, pick format, trigger download
+      LibraryScreen.js            ← browse and filter downloaded files
+      PlayerScreen.js             ← audio and video playback
+  assets/
+    icon.png                      ← app icon
+    splash-icon.png               ← splash screen image
+    adaptive-icon.png             ← Android adaptive icon
 ```
 
 ---
@@ -1300,6 +1534,31 @@ onAuthStateChanged(auth, (user) => {
 | **Total** | — | **$0/mo** |
 
 > **Storage tip:** All media files are saved directly to your phone by the mobile app using `expo-file-system`. Nothing is uploaded to the cloud, so there are no storage costs regardless of how much you download.
+
+---
+
+## ❓ FAQ
+
+**Why can't the backend run on Railway or Render?**
+Both services use shared datacenter IP ranges that YouTube has flagged as bot/scraper infrastructure. yt-dlp returns "Sign in to confirm you're not a bot" regardless of configuration. The workaround is running the backend locally on your own machine (a residential IP) and exposing it via Cloudflare Tunnel. See `SYSTEM_DESIGN.md` → Decision 3 for the full investigation.
+
+**Why does the Cloudflare URL change every time I restart?**
+The current setup uses an ad-hoc tunnel (`cloudflared tunnel --url ...`) which generates a random subdomain each session. Sprint 2 of v1.2.0 fixes this by creating a named tunnel with a permanent subdomain — you set it up once and it never changes.
+
+**Does the app work on Android?**
+The codebase is cross-platform React Native but has only been tested on iOS via Expo Go. Android should work in theory, but the Google OAuth Android client ID hasn't been configured yet (`YOUR_ANDROID_CLIENT_ID` placeholder in `LoginScreen.js`). Background audio behaviour and file storage paths may also differ on Android.
+
+**What happens if I close the Expo terminal?**
+The app stops loading on your phone — Expo Go streams the app live from your dev server. Downloaded files already on your device are safe and persist. Restart `npx expo start` and re-scan the QR code to get back in.
+
+**Can I use the app without my computer running?**
+No — not in v1.1.0. The backend (which does the actual downloading) runs on your local machine. Once a file is downloaded and saved to your phone, you can play it offline without the computer. The computer only needs to be on when you want to download something new.
+
+**Google Sign-In says "redirect_uri_mismatch" — how do I log in during development?**
+This is a fundamental Expo Go limitation — Google rejects `exp://` redirect URIs. Use the **⚠️ Dev Login (anonymous)** button on the login screen. It's only visible when running in development (`__DEV__` mode) and gives you a Firebase Anonymous Auth session that works with the backend. Real Google Sign-In will work once you create a TestFlight build (Sprint 3.2).
+
+**How do I stop the app from asking for a new Cloudflare URL every session?**
+Sprint 2 of v1.2.0 sets up a named Cloudflare Tunnel with a permanent subdomain. Once done, `BACKEND_URL` in `constants.js` never needs to change again.
 
 ---
 

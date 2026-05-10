@@ -1,9 +1,9 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import {
   View, Text, Image, TouchableOpacity, StyleSheet,
-  Dimensions, PanResponder, Alert,
+  Dimensions, PanResponder, Alert, Modal, FlatList, Pressable,
 } from 'react-native';
-import { useAudioPlayer, useAudioPlayerStatus, setAudioModeAsync } from 'expo-audio';
+import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../constants';
@@ -21,20 +21,49 @@ const SPEEDS   = [0.6, 1.0, 1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0];
 const SCREEN_W = Dimensions.get('window').width;
 const SEEK_W   = SCREEN_W - 48;
 
+// ── Speed Modal ───────────────────────────────────────────────────────────────
+
+function SpeedModal({ visible, current, onSelect, onClose }) {
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <Pressable style={styles.modalOverlay} onPress={onClose}>
+        <Pressable style={styles.modalSheet} onPress={() => {}}>
+          <Text style={styles.modalTitle}>Playback Speed</Text>
+          <FlatList
+            data={SPEEDS}
+            keyExtractor={s => String(s)}
+            renderItem={({ item: s }) => (
+              <TouchableOpacity
+                style={[styles.modalRow, s === current && styles.modalRowActive]}
+                onPress={() => onSelect(s)}
+              >
+                <Text style={[styles.modalRowText, s === current && styles.modalRowTextActive]}>
+                  {s}×
+                </Text>
+                {s === current && <Text style={styles.modalCheck}>✓</Text>}
+              </TouchableOpacity>
+            )}
+          />
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
 // ── Audio Player ──────────────────────────────────────────────────────────────
 
 function AudioPlayer({ item }) {
   const insets = useSafeAreaInsets();
   const [speed, setSpeed] = useState(1.0);
+  const [speedModalVisible, setSpeedModalVisible] = useState(false);
 
-  // Enable background + silent mode playback
-  useEffect(() => {
-    setAudioModeAsync({
-      playsInSilentModeIOS:    true,
-      staysActiveInBackground: true,
-    }).catch(() => {});
-  }, []);
-
+  // Audio session is configured once at app startup in App.js.
+  // No need to call setAudioModeAsync here.
   const player = useAudioPlayer({ uri: item.localUri });
   const status = useAudioPlayerStatus(player);
 
@@ -71,14 +100,20 @@ function AudioPlayer({ item }) {
     ? formatTime((seekPos.current / SEEK_W) * dur)
     : formatTime(pos);
 
-  const cycleSpeed = () => {
-    const next = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length];
-    setSpeed(next);
-    player.setPlaybackRate(next);
+  const handleSelectSpeed = (s) => {
+    setSpeed(s);
+    player.setPlaybackRate(s);
+    setSpeedModalVisible(false);
   };
 
   return (
     <View style={[styles.screen, { paddingBottom: insets.bottom + 16 }]}>
+      <SpeedModal
+        visible={speedModalVisible}
+        current={speed}
+        onSelect={handleSelectSpeed}
+        onClose={() => setSpeedModalVisible(false)}
+      />
 
       {/* Artwork */}
       <View style={styles.artWrap}>
@@ -108,7 +143,7 @@ function AudioPlayer({ item }) {
       {/* Controls */}
       <View style={styles.controls}>
 
-        <TouchableOpacity style={styles.speedBtn} onPress={cycleSpeed}>
+        <TouchableOpacity style={styles.speedBtn} onPress={() => setSpeedModalVisible(true)}>
           <Text style={styles.speedText}>{speed}×</Text>
         </TouchableOpacity>
 
@@ -146,19 +181,26 @@ function AudioPlayer({ item }) {
 function VideoPlayer({ item }) {
   const insets = useSafeAreaInsets();
   const [speed, setSpeed] = useState(1.0);
+  const [speedModalVisible, setSpeedModalVisible] = useState(false);
 
   const player = useVideoPlayer({ uri: item.localUri }, p => {
     p.loop = false;
   });
 
-  const cycleSpeed = () => {
-    const next = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length];
-    setSpeed(next);
-    player.playbackRate = next;
+  const handleSelectSpeed = (s) => {
+    setSpeed(s);
+    player.playbackRate = s;
+    setSpeedModalVisible(false);
   };
 
   return (
     <View style={[styles.screen, { paddingBottom: insets.bottom }]}>
+      <SpeedModal
+        visible={speedModalVisible}
+        current={speed}
+        onSelect={handleSelectSpeed}
+        onClose={() => setSpeedModalVisible(false)}
+      />
       <VideoView
         player={player}
         style={styles.video}
@@ -168,7 +210,7 @@ function VideoPlayer({ item }) {
       <View style={styles.videoMeta}>
         <Text style={styles.videoTitle} numberOfLines={2}>{item.title || item.filename}</Text>
         <Text style={styles.videoChannel}>{item.channel || ''}</Text>
-        <TouchableOpacity style={styles.speedBtn} onPress={cycleSpeed}>
+        <TouchableOpacity style={styles.speedBtn} onPress={() => setSpeedModalVisible(true)}>
           <Text style={styles.speedText}>{speed}×</Text>
         </TouchableOpacity>
       </View>
@@ -225,4 +267,14 @@ const styles = StyleSheet.create({
   playIcon:     { color: '#fff', fontSize: 28 },
   playlistBadge:{ backgroundColor: COLORS.surface, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, maxWidth: 72 },
   playlistText: { color: COLORS.textSecondary, fontSize: 11 },
+
+  // Speed modal
+  modalOverlay:      { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
+  modalSheet:        { backgroundColor: COLORS.surface, borderRadius: 16, width: 220, paddingVertical: 8, paddingHorizontal: 0 },
+  modalTitle:        { color: COLORS.textSecondary, fontSize: 12, fontWeight: '700', textAlign: 'center', letterSpacing: 1, textTransform: 'uppercase', paddingVertical: 12 },
+  modalRow:          { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24, paddingVertical: 14 },
+  modalRowActive:    { backgroundColor: COLORS.bg },
+  modalRowText:      { color: COLORS.textPrimary, fontSize: 17 },
+  modalRowTextActive:{ color: COLORS.teal, fontWeight: '700' },
+  modalCheck:        { color: COLORS.teal, fontSize: 16 },
 });

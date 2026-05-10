@@ -43,7 +43,9 @@ router.post('/', async (req, res) => {
         updateJob(jobId, { progress: Math.round(5 + frac * 90) });
       });
 
-      const ext      = format === 'audio' ? 'mp3' : 'mp4';
+      // Derive the extension from the actual output file returned by yt-dlp
+      // (which may be .mp4, .mp3, or occasionally .mkv as a last resort).
+      const ext      = path.extname(localPath).slice(1) || (format === 'audio' ? 'mp3' : 'mp4');
       const stem     = metadata && metadata.videoId
         ? metadata.videoId
         : path.basename(localPath, '.' + ext);

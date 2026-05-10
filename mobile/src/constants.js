@@ -1,4 +1,4 @@
-export const BACKEND_URL = 'https://colors-expressions-concentrate-lopez.trycloudflare.com';
+export const BACKEND_URL = 'https://tropics-proton-unbitten.ngrok-free.dev';
 
 export const COLORS = {
   bg:            '#0f172a',

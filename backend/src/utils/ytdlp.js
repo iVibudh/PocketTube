@@ -67,11 +67,17 @@ async function downloadMedia(url, format, resolution, onProgress) {
   if (format === 'audio') {
     formatArgs = ['-x', '--audio-format', 'mp3', '--audio-quality', '0'];
   } else {
-    // Build a format selector that respects the requested resolution cap
+    // Build a format selector that respects the requested resolution cap.
+    // --merge-output-format mp4 forces ffmpeg to always produce an mp4
+    // container, preventing yt-dlp from silently falling back to .mkv
+    // (which happens when stream codecs aren't natively mp4-compatible).
+    // The format selector prefers a pre-muxed mp4 first (no merge step),
+    // then falls back to separate best video+audio streams for merging.
     const heightCap = resolution ? `[height<=${resolution}]` : '';
     formatArgs = [
       '-f',
-      `bestvideo${heightCap}[ext=mp4]+bestaudio[ext=m4a]/bestvideo${heightCap}+bestaudio/best${heightCap}[ext=mp4]/best${heightCap}`
+      `bestvideo${heightCap}[ext=mp4]+bestaudio[ext=m4a]/bestvideo${heightCap}+bestaudio/best${heightCap}[ext=mp4]/best${heightCap}`,
+      '--merge-output-format', 'mp4',
     ];
   }
 
@@ -102,12 +108,17 @@ async function downloadMedia(url, format, resolution, onProgress) {
 
     proc.on('close', code => {
       if (code !== 0) return reject(new Error(stderr || `yt-dlp exited with code ${code}`));
-      const ext = format === 'audio' ? 'mp3' : 'mp4';
-      const filePath = `${outPath}.${ext}`;
-      if (!fs.existsSync(filePath)) {
-        return reject(new Error(`Expected output file not found: ${filePath}`));
+
+      // Glob for the actual output file — don't assume the extension.
+      // yt-dlp normally honours --merge-output-format mp4, but if it
+      // downloaded a pre-muxed stream the extension is whatever the
+      // source container was. Scanning for the job UUID is the safest
+      // way to find the file regardless of what extension was used.
+      const files = fs.readdirSync(DOWNLOADS_DIR).filter(f => f.startsWith(id));
+      if (files.length === 0) {
+        return reject(new Error(`Output file not found for job ${id}`));
       }
-      resolve(filePath);
+      resolve(path.join(DOWNLOADS_DIR, files[0]));
     });
 
     proc.on('error', err => reject(new Error(`yt-dlp not found: ${err.message}`)));

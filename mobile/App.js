@@ -11,8 +11,18 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
+import { setAudioModeAsync } from 'expo-audio';
+
 import { auth, db } from './src/firebase';
 import { COLORS, PLAYLISTS } from './src/constants';
+
+// Configure the global audio session once at app startup.
+// Must happen before any useAudioPlayer is created so that
+// background playback and silent-mode work correctly on iOS.
+setAudioModeAsync({
+  playsInSilentModeIOS:    true,
+  staysActiveInBackground: true,
+}).catch(() => {});
 
 import LoginScreen    from './src/screens/LoginScreen';
 import DownloadScreen from './src/screens/DownloadScreen';

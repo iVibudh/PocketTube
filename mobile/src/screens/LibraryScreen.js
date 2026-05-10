@@ -56,13 +56,34 @@ export default function LibraryScreen() {
     const user = auth.currentUser;
     if (!user) return;
     const ref = collection(db, `users/${user.uid}/media`);
+
+    // Compound queries (where + orderBy) require a Firestore composite index,
+    // which throws "failed-precondition" if the index doesn't exist yet.
+    // Work-around: query with only the where clause and sort client-side.
+    // The "All" filter can still use orderBy alone since that's a simple index.
     const q = filter === 'All'
       ? query(ref, orderBy('downloadedAt', 'desc'))
-      : query(ref, where('playlist', '==', filter), orderBy('downloadedAt', 'desc'));
-    const unsub = onSnapshot(q, snap => {
-      setItems(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-      setLoading(false);
-    });
+      : query(ref, where('playlist', '==', filter));
+
+    const unsub = onSnapshot(
+      q,
+      snap => {
+        let docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        // Sort by downloadedAt descending (mirrors the orderBy used for "All")
+        docs.sort((a, b) => {
+          const aMs = a.downloadedAt?.toMillis?.() ?? 0;
+          const bMs = b.downloadedAt?.toMillis?.() ?? 0;
+          return bMs - aMs;
+        });
+        setItems(docs);
+        setLoading(false);
+      },
+      err => {
+        console.error('Library snapshot error:', err.message);
+        Alert.alert('Could not load library', err.message);
+        setLoading(false);
+      },
+    );
     return unsub;
   }, [filter]);
 
