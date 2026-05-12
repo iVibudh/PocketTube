@@ -2,7 +2,7 @@
   "expo": {
     "name": "PocketTube",
     "slug": "pockettube",
-    "version": "1.1.0",
+    "version": "1.3.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -29,6 +29,7 @@
         "backgroundColor": "#0f172a"
       },
       "package": "com.pockettube.app",
+      "versionCode": 2,
       "permissions": [
         "READ_EXTERNAL_STORAGE",
         "WRITE_EXTERNAL_STORAGE"
@@ -42,7 +43,15 @@
     "plugins": [
       "expo-web-browser",
       "expo-audio",
-      "expo-video"
+      "expo-video",
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow PocketTube to save downloaded videos to your Photos library.",
+          "savePhotosPermission": "Allow PocketTube to save downloaded videos to your Photos library.",
+          "isAccessMediaLocationEnabled": false
+        }
+      ]
     ]
   }
 }
