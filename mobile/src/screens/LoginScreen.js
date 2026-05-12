@@ -13,7 +13,7 @@ WebBrowser.maybeCompleteAuthSession();
 
 const EXPO_CLIENT_ID    = '478381526713-hcgb0ssbl7969gdk9v96ku1n5d9dmass.apps.googleusercontent.com'; // Web
 const IOS_CLIENT_ID     = '478381526713-ukth1iml454cjst6rta1t7m52rot5ec7.apps.googleusercontent.com';  // iOS
-const ANDROID_CLIENT_ID = 'YOUR_ANDROID_CLIENT_ID.apps.googleusercontent.com'; // TODO: replace after Step 2 below
+const ANDROID_CLIENT_ID = '478381526713-ej8gbcnjvs3kgvb8kvb9g2tr489sup4g.apps.googleusercontent.com';
 
 export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
