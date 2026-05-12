@@ -107,7 +107,7 @@ This repo is a learning project. It covers React Native, Expo, Google OAuth, Fir
 
 > **Goal:** Let people actually install and use the app on their phones — Android via a sideloadable APK, iPhone via a browser-based PWA. No Apple Developer account required. Google Sign-In works in both tracks.
 
-**Track 1 — Android APK 🔴**
+**Track 1 — Android APK ✅ Complete**
 - [x] Set up EAS Build (free tier) — `eas build:configure` in `mobile/`; EAS project linked as `@ivibudh/pockettube`
 - [x] Created Android keystore via `eas credentials --platform android` → profile `pockettube-android-preview`; keystore managed by EAS
 - [x] Registered Android OAuth client in Google Cloud Console — package `com.pockettube.app` + SHA-1 from EAS keystore
@@ -115,8 +115,8 @@ This repo is a learning project. It covers React Native, Expo, Google OAuth, Fir
 - [x] Switched Google Sign-In from `expo-auth-session` (browser-based, blocked by Google's redirect URI policy) to `@react-native-google-signin/google-signin` (native Android SDK — no redirect URI needed, verified by package name + SHA-1)
 - [x] Removed anonymous dev login button from `LoginScreen.js`
 - [x] Generated APK via `eas build --platform android --profile preview` (build #3)
-- [x] Test Google Sign-In end-to-end on a real Android device ✅ working in build #3
-- [x] Share APK for sideloading (enable "Install from unknown sources" on device)
+- [x] Google Sign-In confirmed working end-to-end on real Android device ✅
+- [x] APK available for sideloading — see **Install App on Android** section below
 
 **Track 2 — iPhone PWA 🟡**
 
@@ -160,6 +160,24 @@ This repo is a learning project. It covers React Native, Expo, Google OAuth, Fir
 
 - [ ] Fix background audio on iOS and Android — investigate `expo-audio` AVAudioSession (iOS) and audio focus (Android) interaction with Expo Go; likely needs a custom EAS build to test properly
 - [ ] Fix video playback on iOS — investigate `expo-video` / AVFoundation codec compatibility; check whether H.265/HEVC or container issues are the root cause on device
+
+---
+
+## 📲 Install App on Android
+
+> Sideload the APK directly onto any Android phone — no Play Store, no account needed.
+
+**Scan the QR code or open the link below:**
+
+🔗 [Download APK — build #3 (v1.3.0)](https://expo.dev/accounts/ivibudh/projects/pockettube/builds/fa3e5af0-6fbb-47eb-8eb4-96df495feed4)
+
+**Steps to install:**
+1. Open the link above on your Android phone and download the `.apk` file
+2. Go to **Settings → Security** (or Apps, depending on manufacturer) → enable **"Install from unknown sources"** for your browser or Files app
+3. Tap the downloaded `.apk` file to install
+4. Open PocketTube and sign in with your Google account
+
+> ⚠️ If you see a warning like "App not installed" or "Blocked by Play Protect", tap **"Install anyway"** — this is expected for sideloaded APKs that aren't from the Play Store.
 
 ---
 
@@ -266,13 +284,13 @@ These are not bugs — they are current constraints of the v1.1.0 build. Each on
 
 ## 📋 Changelog
 
-### v1.3.0 *(in progress — 2026-05-12)*
+### v1.3.0 *(2026-05-12)*
 - Set up EAS Build for Android; keystore managed by EAS under profile `pockettube-android-preview`
 - Added Android app to Firebase; `google-services.json` gitignored (kept local, not committed)
 - Switched Google Sign-In to `@react-native-google-signin/google-signin` native SDK — replaces `expo-auth-session` browser-based flow which was rejected by Google's OAuth 2.0 redirect URI policy
 - Android OAuth client registered in Google Cloud Console (package `com.pockettube.app` + SHA-1)
 - Removed anonymous dev login button from `LoginScreen.js`
-- APK build #3 in progress — pending sign-in test on device
+- Google Sign-In confirmed working end-to-end on real Android device (build #3) ✅
 
 ### v1.2.0 *(2026-05-10)*
 - Switched tunnel from Cloudflare ad-hoc to ngrok free static domain — `constants.js` URL is now permanent
