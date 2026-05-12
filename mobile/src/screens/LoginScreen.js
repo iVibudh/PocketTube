@@ -5,26 +5,28 @@ import {
 } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
+import { makeRedirectUri } from 'expo-auth-session';
 import { GoogleAuthProvider, signInWithCredential } from 'firebase/auth';
 import { auth } from '../firebase';
 import { COLORS } from '../constants';
 
 WebBrowser.maybeCompleteAuthSession();
 
-const EXPO_CLIENT_ID    = '478381526713-hcgb0ssbl7969gdk9v96ku1n5d9dmass.apps.googleusercontent.com'; // Web
-const IOS_CLIENT_ID     = '478381526713-ukth1iml454cjst6rta1t7m52rot5ec7.apps.googleusercontent.com';  // iOS
-const ANDROID_CLIENT_ID = '478381526713-ej8gbcnjvs3kgvb8kvb9g2tr489sup4g.apps.googleusercontent.com';
+// All platforms use the Web client ID — expo-auth-session uses a browser-based
+// OAuth flow, so Google requires an https:// redirect URI (custom schemes like
+// pockettube:// are rejected). The Expo auth proxy provides that https:// bridge.
+const WEB_CLIENT_ID = '478381526713-hcgb0ssbl7969gdk9v96ku1n5d9dmass.apps.googleusercontent.com';
 
 export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
 
-  // makeRedirectUri() auto-detects the right URI:
-  //   - Expo Go dev builds  → exp://...
-  //   - EAS native builds   → pockettube://... (uses scheme from app.json)
+  // useProxy: true routes through https://auth.expo.io — an https redirect URI
+  // that Google's Web client accepts. Works in both Expo Go and EAS native builds.
+  const redirectUri = makeRedirectUri({ useProxy: true });
+
   const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
-    clientId:        EXPO_CLIENT_ID,
-    iosClientId:     IOS_CLIENT_ID,
-    androidClientId: ANDROID_CLIENT_ID,
+    clientId: WEB_CLIENT_ID,
+    redirectUri,
   });
 
   React.useEffect(() => {
