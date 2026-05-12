@@ -56,7 +56,7 @@ This repo is a learning project. It covers React Native, Expo, Google OAuth, Fir
 
 ## ✅ Master Checklist
 
-> **Current version: 1.2.0** · Targeting: **1.3.0** · Planned: **1.4.0** · Future: **1.5.0**
+> **Current version: 1.3.0** · Targeting: **1.4.0** · Planned: **1.5.0**
 
 ### v1.0.0 — Initial Build
 
@@ -79,7 +79,7 @@ This repo is a learning project. It covers React Native, Expo, Google OAuth, Fir
 - [x] Audio downloads working end-to-end
 - [x] `app.json` version bumped to 1.1.0, `UIBackgroundModes: ["audio"]` confirmed present
 
-### v1.2.0 — Playback Fixes & Polish *(current)*
+### v1.2.0 — Playback Fixes & Polish
 
 **Sprint 1 — Core Playback Fixes 🔴**
 - [~] Fix audio background playback — `PlayerContext` architecture in place; **still broken on both iOS and Android** (deferred to v1.5)
@@ -103,17 +103,20 @@ This repo is a learning project. It covers React Native, Expo, Google OAuth, Fir
 - [x] Add troubleshooting entries: Firestore index fix, ffmpeg PATH on Windows, ngrok static domain setup
 - [x] Commit all v1.1.0 changes to git (`git add -A && git commit -m "v1.1.0: downloads working, local backend, anonymous auth"`)
 
-### v1.3.0 — Distribution (No Apple Dev Account)
+### v1.3.0 — Distribution (No Apple Dev Account) *(current)*
 
 > **Goal:** Let people actually install and use the app on their phones — Android via a sideloadable APK, iPhone via a browser-based PWA. No Apple Developer account required. Google Sign-In works in both tracks.
 
 **Track 1 — Android APK 🔴**
-- [ ] Set up EAS Build (free tier) — `eas build:configure` in `mobile/`
-- [ ] Register proper Android OAuth redirect URI in Google Cloud Console (fixes `redirect_uri_mismatch` for native builds)
-- [ ] Remove anonymous dev login button — guarded by `__DEV__` but must not ship (`LoginScreen.js`)
-- [ ] Generate release APK via `eas build --platform android --profile preview`
-- [ ] Test Google Sign-In end-to-end on a real Android device
-- [ ] Share APK for sideloading (enable "Install from unknown sources" on device)
+- [x] Set up EAS Build (free tier) — `eas build:configure` in `mobile/`; EAS project linked as `@ivibudh/pockettube`
+- [x] Created Android keystore via `eas credentials --platform android` → profile `pockettube-android-preview`; keystore managed by EAS
+- [x] Registered Android OAuth client in Google Cloud Console — package `com.pockettube.app` + SHA-1 from EAS keystore
+- [x] Added Android app to Firebase project → downloaded `google-services.json` → added to `mobile/` and referenced in `app.json`; gitignored to keep API key out of version control
+- [x] Switched Google Sign-In from `expo-auth-session` (browser-based, blocked by Google's redirect URI policy) to `@react-native-google-signin/google-signin` (native Android SDK — no redirect URI needed, verified by package name + SHA-1)
+- [x] Removed anonymous dev login button from `LoginScreen.js`
+- [x] Generated APK via `eas build --platform android --profile preview` (build #3)
+- [x] Test Google Sign-In end-to-end on a real Android device ✅ working in build #3
+- [x] Share APK for sideloading (enable "Install from unknown sources" on device)
 
 **Track 2 — iPhone PWA 🟡**
 
@@ -157,6 +160,58 @@ This repo is a learning project. It covers React Native, Expo, Google OAuth, Fir
 
 - [ ] Fix background audio on iOS and Android — investigate `expo-audio` AVAudioSession (iOS) and audio focus (Android) interaction with Expo Go; likely needs a custom EAS build to test properly
 - [ ] Fix video playback on iOS — investigate `expo-video` / AVFoundation codec compatibility; check whether H.265/HEVC or container issues are the root cause on device
+
+---
+
+## 📦 How to Build the Android APK
+
+> Run these from inside the `mobile/` folder. EAS builds happen in the cloud — your machine just needs to upload the code.
+
+### First-time setup (already done — notes for reference)
+
+| Step | What was done |
+|---|---|
+| EAS project | `eas login` + `eas build:configure` → linked to `@ivibudh/pockettube` |
+| Android keystore | `eas credentials --platform android` → profile `pockettube-android-preview`; managed by EAS |
+| Google OAuth (Android) | Created Android client in Google Cloud Console with package `com.pockettube.app` + SHA-1 from EAS keystore |
+| Firebase Android app | Added Android app in Firebase console → downloaded `google-services.json` → placed in `mobile/` |
+| Google Sign-In SDK | Installed `@react-native-google-signin/google-signin`; configured with web client ID in `LoginScreen.js` |
+
+### Building a new APK
+
+```bash
+# 1. Bump versionCode in mobile/app.json (must increment every build)
+#    "versionCode": <current + 1>
+
+# 2. Commit your changes
+git add -A
+git commit -m "vX.X.X: description of changes"
+
+# 3. Trigger the cloud build
+cd mobile
+eas build --platform android --profile preview
+```
+
+The build takes ~10–15 minutes. EAS provides a link to monitor progress and download the APK when done.
+
+### Installing the APK on an Android device
+
+1. Download the `.apk` from the EAS build page
+2. Send it to the device (email, Google Drive, USB)
+3. On the device: Settings → Security → enable **"Install from unknown sources"** for the browser or Files app
+4. Tap the downloaded `.apk` to install
+
+### What `google-services.json` is and why it's gitignored
+
+`google-services.json` contains a Firebase API key tied to the Android app. It is intentionally excluded from git (see `mobile/.gitignore`). EAS builds work without it being committed because the Android OAuth client is verified by **package name + SHA-1 fingerprint** (not by the file itself). Keep a copy of `google-services.json` locally — if you lose it, re-download it from Firebase Console → Project Settings → Your Apps → Android app.
+
+### Troubleshooting Google Sign-In on Android
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `DEVELOPER_ERROR` on sign-in | SHA-1 fingerprint mismatch | Re-run `eas credentials --platform android` → verify the SHA-1 matches what's in Google Cloud Console → Android OAuth client |
+| Sign-in cancelled immediately | Google Play Services not available | Test on a real Android device, not an emulator without Play Services |
+| `No ID token returned` | webClientId mismatch | Verify `webClientId` in `LoginScreen.js` matches the **Web** client ID (not Android) in Google Cloud Console |
 
 ---
 
@@ -211,7 +266,15 @@ These are not bugs — they are current constraints of the v1.1.0 build. Each on
 
 ## 📋 Changelog
 
-### v1.2.0 *(in progress — 2026-05-10)*
+### v1.3.0 *(in progress — 2026-05-12)*
+- Set up EAS Build for Android; keystore managed by EAS under profile `pockettube-android-preview`
+- Added Android app to Firebase; `google-services.json` gitignored (kept local, not committed)
+- Switched Google Sign-In to `@react-native-google-signin/google-signin` native SDK — replaces `expo-auth-session` browser-based flow which was rejected by Google's OAuth 2.0 redirect URI policy
+- Android OAuth client registered in Google Cloud Console (package `com.pockettube.app` + SHA-1)
+- Removed anonymous dev login button from `LoginScreen.js`
+- APK build #3 in progress — pending sign-in test on device
+
+### v1.2.0 *(2026-05-10)*
 - Switched tunnel from Cloudflare ad-hoc to ngrok free static domain — `constants.js` URL is now permanent
 - Fixed Firestore `failed-precondition` crash when filtering Library by playlist (client-side sort workaround)
 - Applied fixes for background audio and video picture (under investigation — not yet resolved on device)
@@ -1631,6 +1694,8 @@ Sprint 2 of v1.2.0 sets up a named Cloudflare Tunnel with a permanent subdomain.
 | Render deploy succeeds but health check fails | `PORT` env var not set | Set `PORT=8080` in Render dashboard → Environment |
 | `Invalid or expired token` from backend | `FIREBASE_SERVICE_ACCOUNT` env var missing or corrupted | Generate the base64 value with `node -e "console.log(Buffer.from(JSON.stringify(require('./firebase-service-account.json'))).toString('base64'))"` and set it in Render environment variables. |
 | Google sign-in "Error 400: redirect_uri_mismatch" in Expo Go | Google rejects `exp://` redirect URIs — they're not a valid public top-level domain | This is a fundamental Expo Go limitation. Google Sign-In won't work in Expo Go regardless of what you register. Use the **⚠️ Dev Login (anonymous)** button on the login screen (visible in `__DEV__` mode only) to sign in with Firebase Anonymous Auth and test the rest of the app. Real Google Sign-In works once you create a development build (TestFlight). **Remove the dev button before releasing.** |
+| Google sign-in "Error 400: invalid_request" or "Authorization Error" in EAS APK | `expo-auth-session` browser-based OAuth flow sends a custom URI scheme (`pockettube://`) as the redirect URI — Google's OAuth 2.0 policy rejects any redirect URI that is not an `https://` URL | Switched to `@react-native-google-signin/google-signin` native SDK (v1.3.0). The native SDK uses the Android OAuth client verified by package name + SHA-1 fingerprint — no redirect URI involved. Do not attempt to use `expo-auth-session` or `makeRedirectUri({ useProxy: true })` for native Android EAS builds. |
+| Google sign-in `DEVELOPER_ERROR` in EAS APK | SHA-1 fingerprint in Google Cloud Console does not match the EAS keystore | Run `eas credentials --platform android` → select `pockettube-android-preview` → copy the SHA-1. Go to Google Cloud Console → Credentials → PocketTube Android → verify the SHA-1 matches exactly. |
 | Google sign-in error | Wrong client ID | Double-check all 3 OAuth client IDs match |
 | File not found on phone | Wrong `localUri` | Log `FileSystem.documentDirectory` to verify path |
 | Audio won't play in background | Missing plist key | Add `UIBackgroundModes: ["audio"]` to `app.json` |

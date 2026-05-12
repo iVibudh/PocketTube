@@ -30,7 +30,7 @@
         "backgroundColor": "#0f172a"
       },
       "package": "com.pockettube.app",
-      "versionCode": 2,
+      "versionCode": 3,
       "permissions": [
         "READ_EXTERNAL_STORAGE",
         "WRITE_EXTERNAL_STORAGE",
@@ -60,7 +60,8 @@
           "savePhotosPermission": "Allow PocketTube to save downloaded videos to your Photos library.",
           "isAccessMediaLocationEnabled": false
         }
-      ]
+      ],
+      "@react-native-google-signin/google-signin"
     ],
     "extra": {
       "eas": {

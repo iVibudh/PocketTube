@@ -3,43 +3,40 @@ import {
   View, Text, TouchableOpacity, StyleSheet,
   ActivityIndicator, Alert,
 } from 'react-native';
-import * as WebBrowser from 'expo-web-browser';
-import * as Google from 'expo-auth-session/providers/google';
-import { makeRedirectUri } from 'expo-auth-session';
+import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 import { GoogleAuthProvider, signInWithCredential } from 'firebase/auth';
 import { auth } from '../firebase';
 import { COLORS } from '../constants';
 
-WebBrowser.maybeCompleteAuthSession();
-
-// All platforms use the Web client ID — expo-auth-session uses a browser-based
-// OAuth flow, so Google requires an https:// redirect URI (custom schemes like
-// pockettube:// are rejected). The Expo auth proxy provides that https:// bridge.
-const WEB_CLIENT_ID = '478381526713-hcgb0ssbl7969gdk9v96ku1n5d9dmass.apps.googleusercontent.com';
+// Native Google Sign-In — uses the Android/iOS SDK directly, no browser or
+// redirect URIs needed. Verified by package name + SHA-1 fingerprint.
+GoogleSignin.configure({
+  webClientId: '478381526713-hcgb0ssbl7969gdk9v96ku1n5d9dmass.apps.googleusercontent.com',
+});
 
 export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
 
-  // useProxy: true routes through https://auth.expo.io — an https redirect URI
-  // that Google's Web client accepts. Works in both Expo Go and EAS native builds.
-  const redirectUri = makeRedirectUri({ useProxy: true });
-
-  const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
-    clientId: WEB_CLIENT_ID,
-    redirectUri,
-  });
-
-  React.useEffect(() => {
-    if (response?.type === 'success') {
+  const handleSignIn = async () => {
+    try {
       setLoading(true);
-      const { id_token } = response.params;
-      const credential = GoogleAuthProvider.credential(id_token);
-      signInWithCredential(auth, credential)
-        .catch((err) => { Alert.alert('Sign-in failed', err.message); setLoading(false); });
-    } else if (response?.type === 'error') {
-      Alert.alert('Sign-in error', response.error?.message ?? 'Unknown error');
+      await GoogleSignin.hasPlayServices();
+      const userInfo = await GoogleSignin.signIn();
+      const idToken = userInfo.data?.idToken ?? userInfo.idToken;
+      if (!idToken) throw new Error('No ID token returned from Google Sign-In');
+      const credential = GoogleAuthProvider.credential(idToken);
+      await signInWithCredential(auth, credential);
+    } catch (error) {
+      setLoading(false);
+      if (error.code === statusCodes.SIGN_IN_CANCELLED) return;
+      if (error.code === statusCodes.IN_PROGRESS) return;
+      if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+        Alert.alert('Error', 'Google Play Services not available on this device.');
+      } else {
+        Alert.alert('Sign-in failed', error.message);
+      }
     }
-  }, [response]);
+  };
 
   return (
     <View style={styles.container}>
@@ -51,9 +48,8 @@ export default function LoginScreen() {
         <ActivityIndicator size="large" color={COLORS.teal} />
       ) : (
         <TouchableOpacity
-          style={[styles.btn, !request && styles.btnDisabled]}
-          onPress={() => promptAsync()}
-          disabled={!request}
+          style={styles.btn}
+          onPress={handleSignIn}
           activeOpacity={0.8}
         >
           <Text style={styles.btnText}>Sign in with Google</Text>
