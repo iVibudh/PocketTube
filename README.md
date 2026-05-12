@@ -46,17 +46,18 @@ This repo is a learning project. It covers React Native, Expo, Google OAuth, Fir
 
 | Bug | Platform | What happens | Fix applied in v1.2.0 | Status |
 |---|---|---|---|---|
-| Audio stops on screen lock | iOS and Android | Background playback cuts out when screen locks or user switches apps | Moved `useAudioPlayer` into persistent `PlayerContext`; `staysActiveInBackground: true` set | ❌ Still broken on iOS and Android — deferred to v1.5 |
-| Video shows no picture | iOS only | Downloaded video plays audio only — black screen | Forced H.264/AVC codec + `-movflags +faststart` in yt-dlp format selector | ❌ Still broken on iOS — deferred to v1.5 |
+| Audio stops on screen lock | iOS and Android | Background playback cuts out when screen locks or user switches apps | Moved `useAudioPlayer` into persistent `PlayerContext`; `staysActiveInBackground: true` set | ❌ Still broken on iOS and Android — deferred to v1.7 |
+| Video shows no picture | iOS only | Downloaded video plays audio only — black screen | Forced H.264/AVC codec + `-movflags +faststart` in yt-dlp format selector | ❌ Still broken on iOS — deferred to v1.7 |
+
 | Video shows no picture | Android | Downloaded video plays audio only — black screen | Same H.264/AVC + faststart fix | ✅ Resolved on Android in v1.2.0 |
 
-> **Background audio is broken on both iOS and Android** — deferred to v1.5. Video playback works on Android but iOS still shows a black screen (audio only). These issues likely require deeper investigation into how `expo-audio`/`expo-video` interact with the audio session and AVFoundation on a real device build. Expo Go's sandboxed environment may be masking the root cause.
+> **Background audio is broken on both iOS and Android** — deferred to v1.7. Video playback works on Android but iOS still shows a black screen (audio only). These issues likely require deeper investigation into how `expo-audio`/`expo-video` interact with the audio session and AVFoundation on a real device build. Expo Go's sandboxed environment may be masking the root cause.
 
 ---
 
 ## ✅ Master Checklist
 
-> **Current version: 1.3.0** · Targeting: **1.4.0** · Planned: **1.5.0**
+> **Current version: 1.3.0** · Targeting: **1.4.0** · Planned: **1.5.0, 1.6.0, 1.7.0**
 
 ### v1.0.0 — Initial Build
 
@@ -82,8 +83,8 @@ This repo is a learning project. It covers React Native, Expo, Google OAuth, Fir
 ### v1.2.0 — Playback Fixes & Polish
 
 **Sprint 1 — Core Playback Fixes 🔴**
-- [~] Fix audio background playback — `PlayerContext` architecture in place; **still broken on both iOS and Android** (deferred to v1.5)
-- [~] Fix video playback — H.264/AVC + faststart fix applied; works on Android, **still broken on iOS** (deferred to v1.5)
+- [~] Fix audio background playback — `PlayerContext` architecture in place; **still broken on both iOS and Android** (deferred to v1.7)
+- [~] Fix video playback — H.264/AVC + faststart fix applied; works on Android, **still broken on iOS** (deferred to v1.7)
 - [x] Fix Firestore index error — filtering by playlist crashes with `failed-precondition`
 
 **Sprint 2 — Remove Local Desktop Dependency 🟡**
@@ -118,21 +119,37 @@ This repo is a learning project. It covers React Native, Expo, Google OAuth, Fir
 - [x] Google Sign-In confirmed working end-to-end on real Android device ✅
 - [x] APK available for sideloading — see **Install App on Android** section below
 
-**Track 2 — iPhone PWA 🟡**
+**Track 2 — iPhone PWA** *(moved to v1.6.0)*
 
-> iOS Safari cannot read files the app previously saved — playback works by streaming from the backend (computer must be on) or the user picks a file from the Files app manually. No Apple account needed.
+> iPhone PWA support has been deferred to v1.6.0 to allow backend stability and security work (v1.4.0) and Stripe payments (v1.5.0) to land first.
 
-- [ ] Scaffold a React web app (`web/`) — reuses existing Firebase config and backend API
-- [ ] Implement Google Sign-In via standard web OAuth (`signInWithPopup` / `signInWithRedirect`) — works without any Apple account
-- [ ] Download flow: paste URL → backend downloads → file served as a browser download to iPhone Files/Downloads folder
-- [ ] Audio player — HTML5 `<audio>` with play/pause, seek bar, speed selector; background playback via Media Session API
-- [ ] Video player — HTML5 `<video>` with native controls
-- [ ] File picker fallback — `<input type="file">` so user can load a previously saved file for playback
-- [ ] PWA manifest + icons so Safari shows "Add to Home Screen" prompt
-- [ ] Deploy to Vercel or Netlify (free tier) — permanent public URL, no server needed
-- [ ] Test on iPhone: install to home screen, download a file, play it back
+### v1.4.0 — Backend Auto-Start & Security Hardening
 
-### v1.4.0 — Stripe Payments
+> **Goal:** Eliminate the manual startup ritual — the backend and ngrok tunnel should start automatically when the PC boots. Simultaneously harden the backend against abuse and common vulnerabilities, since the ngrok URL is the only thing standing between the open internet and your yt-dlp process.
+
+**Sprint 1 — Windows Auto-Start 🔴**
+- [ ] Create `backend/start-backend.bat` — launches `node src/index.js` from the correct directory; writes stdout/stderr to a dated log file in `backend/logs/` so you can inspect what happened on boot
+- [ ] Create `backend/start-ngrok.bat` — runs `ngrok http --domain=tropics-proton-unbitten.ngrok-free.dev 8080`; also logs output
+- [ ] Register both scripts with **Windows Task Scheduler** to run at user logon (trigger: "At log on" → run whether user is logged on or not → highest privileges)
+  - Task 1: `PocketTube-Backend` — runs `start-backend.bat`
+  - Task 2: `PocketTube-ngrok` — runs `start-ngrok.bat` with a 5-second delay after Task 1 to let the backend bind its port first
+- [ ] Add a 30-second health-check loop inside `start-ngrok.bat` — polls `http://localhost:8080/health` before starting ngrok; exits with an error log entry if the backend never comes up
+- [ ] Test on a clean reboot — verify both processes are running without opening any terminal
+- [ ] (Optional) Add a system tray PowerShell script or use [WinSW](https://github.com/winsw/winsw) to wrap the backend as a proper Windows Service for more reliable lifecycle management
+
+**Sprint 2 — Security Hardening 🟡**
+- [ ] Install and wire up `helmet` middleware — sets secure HTTP response headers (X-Frame-Options, X-Content-Type-Options, Strict-Transport-Security, etc.) with a single `app.use(helmet())`
+- [ ] Install and configure `express-rate-limit` — apply a per-IP rate limit on all `/api/*` routes (e.g. 30 requests per 15 minutes) to prevent abuse if the ngrok URL ever leaks
+- [ ] Fix command injection risk in `ytdlp.js` — replace all shell string interpolation (`exec(\`yt-dlp ... '${url}'\`)`  ) with argument arrays passed to `execFile` or `spawn` so user-supplied URLs can never escape the argument boundary
+- [ ] Validate and sanitize all incoming request body fields — `url` must match a YouTube URL regex; `format` must be exactly `'audio'` or `'video'`; `resolution` must be an allowlisted string (`'720p'`, `'1080p'`, etc.); reject anything else with 400
+- [ ] Run `npm audit --audit-level=high` inside `backend/` and resolve all high and critical findings; document any accepted low/moderate risks
+- [ ] Add startup env-var validation — on `index.js` load, assert that `FIREBASE_SERVICE_ACCOUNT` and `PORT` are present and non-empty; log a clear error and `process.exit(1)` if missing (fail-fast instead of silent auth failures)
+- [ ] Review Firestore security rules — confirm the published rules allow only `request.auth.uid == userId` reads and writes; add a deny-all fallback at the root level
+- [ ] Rotate the Firebase service account key — generate a new key in Firebase Console, update `FIREBASE_SERVICE_ACCOUNT` in `backend/.env`, delete the old key from Firebase Console
+- [ ] Harden the `/health` endpoint — return only `{ status: 'ok' }`; remove any version, environment name, or dependency info that could fingerprint the server
+- [ ] Add `.env` to a pre-commit git hook check — confirm it is in `.gitignore` and has never been staged; use `git secrets` or a simple pre-commit shell script
+
+### v1.5.0 — Stripe Payments
 
 > **Why Stripe and not Apple StoreKit / Google Play Billing:** Because PocketTube is distributed as a sideloaded APK and a PWA — not through the App Store or Play Store — neither platform can enforce their payment rules or take their 15–30% cut. Stripe charges a flat 2.9% + 30¢ per transaction with no monthly fee, has a free sandbox for development, and its hosted Checkout page means you build no payment UI at all.
 
@@ -154,7 +171,29 @@ This repo is a learning project. It covers React Native, Expo, Google OAuth, Fir
 - [ ] Show current plan badge in the side menu (Free / Pro)
 - [ ] Test upgrade flow on both PWA (iPhone) and Android APK
 
-### v1.5.0 — iOS Platform Fixes
+### v1.6.0 — iPhone PWA
+
+> **Goal:** Let iPhone users install PocketTube to their home screen without an Apple Developer account. iOS Safari cannot access files the app previously saved to device storage, so playback works by streaming from the backend (your PC must be on) or by letting the user pick a file from the Files app manually.
+
+**Sprint 1 — Web App Scaffold 🔴**
+- [ ] Create a `web/` folder at the repo root — `npm create vite@latest web -- --template react` (or plain HTML/JS if preferred)
+- [ ] Reuse the existing Firebase config from `mobile/src/firebase.js` — copy into `web/src/firebase.js`
+- [ ] Implement Google Sign-In via `signInWithPopup` / `signInWithRedirect` using the web OAuth client ID — no redirect URI restrictions apply for `https://` hosted pages
+- [ ] Point API calls at the same `BACKEND_URL` (`constants.js` / `.env`) used by the Android app
+
+**Sprint 2 — Download & Playback 🟡**
+- [ ] Download flow: paste URL → call `/api/info` for metadata → call `/api/download` → poll `/api/status` → trigger a browser `<a download>` so the file lands in iPhone Files/Downloads
+- [ ] Audio player — HTML5 `<audio>` element with play/pause, seek bar, and speed selector (0.5×–2×); wire up the [Media Session API](https://developer.mozilla.org/en-US/docs/Web/API/Media_Session_API) for lock screen / Control Center controls
+- [ ] Video player — HTML5 `<video>` with native controls and full-screen support
+- [ ] File picker fallback — `<input type="file" accept="audio/*,video/*">` so the user can load a previously saved file from Files app for offline playback
+
+**Sprint 3 — PWA & Deploy 🟢**
+- [ ] Add `manifest.json` with app name, icons (192×192, 512×512), `display: standalone`, and `start_url` — makes Safari show the "Add to Home Screen" banner
+- [ ] Add a service worker for basic shell caching (app shell only — media files are too large for cache storage)
+- [ ] Deploy to Vercel or Netlify free tier — permanent `https://` URL, no server needed
+- [ ] Test on iPhone: visit URL in Safari → "Add to Home Screen" → open app → sign in → download a file → play it back
+
+### v1.7.0 — iOS Platform Fixes
 
 **iOS-specific bugs that were not resolved by the v1.2.0 fixes. Require deeper investigation on a real device build (not Expo Go).**
 
@@ -270,8 +309,8 @@ These are not bugs — they are current constraints of the v1.1.0 build. Each on
 | Limitation | Status | Planned Fix |
 |---|---|---|
 | Google Sign-In blocked in Expo Go | Google rejects `exp://` redirect URIs | v1.3.0 — EAS Build + TestFlight |
-| Video player shows audio only (iOS) | iOS AVFoundation / expo-video codec issue | v1.5 investigation |
-| Audio stops on screen lock (iOS and Android) | Audio session behaviour in Expo Go | v1.5 investigation |
+| Video player shows audio only (iOS) | iOS AVFoundation / expo-video codec issue | v1.7 investigation |
+| Audio stops on screen lock (iOS and Android) | Audio session behaviour in Expo Go | v1.7 investigation |
 | ~~Video player shows audio only (Android)~~ | ~~yt-dlp format merge issue~~ | ✅ Fixed in v1.2.0 — H.264 + faststart |
 | ~~No lock screen / Control Center controls~~ | ~~NowPlayingInfo not wired up~~ | ✅ Fixed in v1.2.0 — wired via PlayerContext |
 | ~~Speed selector cycles one-by-one~~ | ~~No modal picker yet~~ | ✅ Fixed in v1.1.0 |
@@ -368,7 +407,7 @@ The media player is a core part of the app — both audio and video files should
 - **Pro plan** — one-time payment of **$9.99 + applicable taxes**, no subscription; Pro users have no limit on total stored files but are capped at **10 new downloads per day** to stay within backend resource limits
 - Plan status is stored in Firestore and verified on app launch
 
-> 💳 **Payment implementation planned for v1.4.0 via Stripe.** Because PocketTube distributes as a sideloaded APK and a PWA — not through the App Store or Play Store — neither Apple StoreKit nor Google Play Billing is required. Stripe handles the full payment flow at 2.9% + 30¢ per transaction (no monthly fee, no platform cut). Stripe Checkout is a hosted payment page: the backend creates a session, the app redirects the user there, and a webhook updates Firestore when payment completes.
+> 💳 **Payment implementation planned for v1.5.0 via Stripe.** Because PocketTube distributes as a sideloaded APK and a PWA — not through the App Store or Play Store — neither Apple StoreKit nor Google Play Billing is required. Stripe handles the full payment flow at 2.9% + 30¢ per transaction (no monthly fee, no platform cut). Stripe Checkout is a hosted payment page: the backend creates a session, the app redirects the user there, and a webhook updates Firestore when payment completes.
 
 ### 🗂️ Playlists *(tentative — may not be included in v1)*
 - Optionally organize downloads into playlist categories: Music, Podcasts, Sleep, Focus, Language, Videos, General
@@ -389,7 +428,7 @@ The media player is a core part of the app — both audio and video files should
 | File Storage | Device-local only (no cloud storage) | Free |
 | Download Engine | yt-dlp + Node.js backend | Free |
 | Cloud Hosting | Render.com | Free tier (750 hrs/month) |
-| Payments | Stripe Checkout *(v1.4.0)* | 2.9% + 30¢ per transaction — no platform cut (not distributed via App Store / Play Store) |
+| Payments | Stripe Checkout *(v1.5.0)* | 2.9% + 30¢ per transaction — no platform cut (not distributed via App Store / Play Store) |
 | iOS Distribution | TestFlight (personal) | $99/yr — Apple Dev account |
 
 ---
