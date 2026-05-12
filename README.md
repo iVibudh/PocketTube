@@ -206,7 +206,11 @@ This repo is a learning project. It covers React Native, Expo, Google OAuth, Fir
 
 > Sideload the APK directly onto any Android phone — no Play Store, no account needed.
 
-**Scan the QR code or open the link below:**
+**Scan the QR code below with your Android phone's camera, or open the link:**
+
+<p align="center">
+  <img src="docs/assets/qr-android.png" alt="QR code — PocketTube Android APK download" width="220"/>
+</p>
 
 🔗 [Download APK — build #3 (v1.3.0)](https://expo.dev/accounts/ivibudh/projects/pockettube/builds/fa3e5af0-6fbb-47eb-8eb4-96df495feed4)
 
