@@ -3,44 +3,40 @@ import {
   View, Text, TouchableOpacity, StyleSheet,
   ActivityIndicator, Alert,
 } from 'react-native';
-import * as WebBrowser from 'expo-web-browser';
-import * as Google from 'expo-auth-session/providers/google';
-import * as AuthSession from 'expo-auth-session';
-import { GoogleAuthProvider, signInWithCredential, signInAnonymously } from 'firebase/auth';
+import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
+import { GoogleAuthProvider, signInWithCredential } from 'firebase/auth';
 import { auth } from '../firebase';
 import { COLORS } from '../constants';
 
-WebBrowser.maybeCompleteAuthSession();
-
-const EXPO_CLIENT_ID    = '478381526713-hcgb0ssbl7969gdk9v96ku1n5d9dmass.apps.googleusercontent.com'; // Web
-const IOS_CLIENT_ID     = '478381526713-ukth1iml454cjst6rta1t7m52rot5ec7.apps.googleusercontent.com';  // iOS
-const ANDROID_CLIENT_ID = 'YOUR_ANDROID_CLIENT_ID.apps.googleusercontent.com'; // Phase 6 — add when needed
-
-// Redirect URI for Expo Go development — must match what's registered in Google Cloud Console
-// If your local IP changes, update this and re-register it in Google Console
-const redirectUri = AuthSession.makeRedirectUri({ scheme: 'exp' });
+// Native Google Sign-In — uses the Android/iOS SDK directly, no browser or
+// redirect URIs needed. Verified by package name + SHA-1 fingerprint.
+GoogleSignin.configure({
+  webClientId: '478381526713-hcgb0ssbl7969gdk9v96ku1n5d9dmass.apps.googleusercontent.com',
+});
 
 export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
 
-  const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
-    clientId:        EXPO_CLIENT_ID,
-    iosClientId:     IOS_CLIENT_ID,
-    androidClientId: ANDROID_CLIENT_ID,
-    redirectUri,
-  });
-
-  React.useEffect(() => {
-    if (response?.type === 'success') {
+  const handleSignIn = async () => {
+    try {
       setLoading(true);
-      const { id_token } = response.params;
-      const credential = GoogleAuthProvider.credential(id_token);
-      signInWithCredential(auth, credential)
-        .catch((err) => { Alert.alert('Sign-in failed', err.message); setLoading(false); });
-    } else if (response?.type === 'error') {
-      Alert.alert('Sign-in error', response.error?.message ?? 'Unknown error');
+      await GoogleSignin.hasPlayServices();
+      const userInfo = await GoogleSignin.signIn();
+      const idToken = userInfo.data?.idToken ?? userInfo.idToken;
+      if (!idToken) throw new Error('No ID token returned from Google Sign-In');
+      const credential = GoogleAuthProvider.credential(idToken);
+      await signInWithCredential(auth, credential);
+    } catch (error) {
+      setLoading(false);
+      if (error.code === statusCodes.SIGN_IN_CANCELLED) return;
+      if (error.code === statusCodes.IN_PROGRESS) return;
+      if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+        Alert.alert('Error', 'Google Play Services not available on this device.');
+      } else {
+        Alert.alert('Sign-in failed', error.message);
+      }
     }
-  }, [response]);
+  };
 
   return (
     <View style={styles.container}>
@@ -52,33 +48,17 @@ export default function LoginScreen() {
         <ActivityIndicator size="large" color={COLORS.teal} />
       ) : (
         <TouchableOpacity
-          style={[styles.btn, !request && styles.btnDisabled]}
-          onPress={() => promptAsync()}
-          disabled={!request}
+          style={styles.btn}
+          onPress={handleSignIn}
           activeOpacity={0.8}
         >
           <Text style={styles.btnText}>Sign in with Google</Text>
         </TouchableOpacity>
       )}
-      {/* DEV ONLY — remove before TestFlight */}
-      {__DEV__ && (
-        <TouchableOpacity
-          style={styles.devBtn}
-          onPress={() => {
-            setLoading(true);
-            signInAnonymously(auth).catch((err) => {
-              Alert.alert('Dev login failed', err.message);
-              setLoading(false);
-            });
-          }}
-        >
-          <Text style={styles.devBtnText}>⚠️ Dev Login (anonymous)</Text>
-        </TouchableOpacity>
-      )}
 
       <View style={styles.footer}>
         <Text style={styles.disclaimer}>For personal use only · Not affiliated with YouTube</Text>
-        <Text style={styles.version}>Version 1.1.0</Text>
+        <Text style={styles.version}>Version 1.3.0</Text>
       </View>
     </View>
   );
@@ -96,6 +76,4 @@ const styles = StyleSheet.create({
   footer:      { position: 'absolute', bottom: 40, alignItems: 'center', gap: 4 },
   disclaimer:  { fontSize: 12, color: COLORS.textMuted },
   version:     { fontSize: 11, color: COLORS.border },
-  devBtn:      { marginTop: 24, borderWidth: 1, borderColor: '#f59e0b', borderRadius: 10, paddingVertical: 12, paddingHorizontal: 32, width: '100%', alignItems: 'center' },
-  devBtnText:  { color: '#f59e0b', fontSize: 14, fontWeight: '600' },
 });

@@ -46,17 +46,17 @@ This repo is a learning project. It covers React Native, Expo, Google OAuth, Fir
 
 | Bug | Platform | What happens | Fix applied in v1.2.0 | Status |
 |---|---|---|---|---|
-| Audio stops on screen lock | iOS only | Background playback cuts out when screen locks or user switches apps | Moved `useAudioPlayer` into persistent `PlayerContext`; `staysActiveInBackground: true` set | ❌ Still broken on iOS — deferred to v1.4 |
-| Video shows no picture | iOS only | Downloaded video plays audio only — black screen | Forced H.264/AVC codec + `-movflags +faststart` in yt-dlp format selector | ❌ Still broken on iOS — deferred to v1.4 |
+| Audio stops on screen lock | iOS and Android | Background playback cuts out when screen locks or user switches apps | Moved `useAudioPlayer` into persistent `PlayerContext`; `staysActiveInBackground: true` set | ❌ Still broken on iOS and Android — deferred to v1.5 |
+| Video shows no picture | iOS only | Downloaded video plays audio only — black screen | Forced H.264/AVC codec + `-movflags +faststart` in yt-dlp format selector | ❌ Still broken on iOS — deferred to v1.5 |
 | Video shows no picture | Android | Downloaded video plays audio only — black screen | Same H.264/AVC + faststart fix | ✅ Resolved on Android in v1.2.0 |
 
-> **iOS-specific issues are deferred to v1.4.** Both bugs work correctly on Android after the v1.2.0 fixes. The iOS problems likely require deeper investigation into how `expo-audio`/`expo-video` interact with the iOS audio session and AVFoundation on a real device build. Expo Go's sandboxed environment may be masking the root cause.
+> **Background audio is broken on both iOS and Android** — deferred to v1.5. Video playback works on Android but iOS still shows a black screen (audio only). These issues likely require deeper investigation into how `expo-audio`/`expo-video` interact with the audio session and AVFoundation on a real device build. Expo Go's sandboxed environment may be masking the root cause.
 
 ---
 
 ## ✅ Master Checklist
 
-> **Current version: 1.1.0** · Targeting: **1.2.0** · Planned: **1.3.0** · Future: **1.4.0**
+> **Current version: 1.3.0** · Targeting: **1.4.0** · Planned: **1.5.0**
 
 ### v1.0.0 — Initial Build
 
@@ -68,7 +68,7 @@ This repo is a learning project. It covers React Native, Expo, Google OAuth, Fir
 - [x] Google OAuth client IDs configured (Web, iOS)
 - [x] Playlist system — 7 default categories
 
-### v1.1.0 — Downloads Working *(current)*
+### v1.1.0 — Downloads Working
 
 - [x] Anonymous auth dev login button (`__DEV__` only, remove before TestFlight)
 - [x] Fixed Firebase Admin token verification — base64 env var approach for service account
@@ -79,11 +79,11 @@ This repo is a learning project. It covers React Native, Expo, Google OAuth, Fir
 - [x] Audio downloads working end-to-end
 - [x] `app.json` version bumped to 1.1.0, `UIBackgroundModes: ["audio"]` confirmed present
 
-### v1.2.0 — Planned
+### v1.2.0 — Playback Fixes & Polish
 
 **Sprint 1 — Core Playback Fixes 🔴**
-- [~] Fix audio background playback — `PlayerContext` architecture in place; works on Android, **still broken on iOS** (deferred to v1.4)
-- [~] Fix video playback — H.264/AVC + faststart fix applied; works on Android, **still broken on iOS** (deferred to v1.4)
+- [~] Fix audio background playback — `PlayerContext` architecture in place; **still broken on both iOS and Android** (deferred to v1.5)
+- [~] Fix video playback — H.264/AVC + faststart fix applied; works on Android, **still broken on iOS** (deferred to v1.5)
 - [x] Fix Firestore index error — filtering by playlist crashes with `failed-precondition`
 
 **Sprint 2 — Remove Local Desktop Dependency 🟡**
@@ -100,30 +100,136 @@ This repo is a learning project. It covers React Native, Expo, Google OAuth, Fir
 
 **Sprint 4 — Stability & Polish 🟢**
 - [x] Partial download cleanup — `_cleanPartials()` in `ytdlp.js` deletes `.part` / intermediate files on any yt-dlp failure
-- [ ] Add troubleshooting entries: Firestore index fix, ffmpeg PATH on Windows, ngrok static domain setup
-- [ ] Commit all v1.1.0 changes to git (`git add -A && git commit -m "v1.1.0: downloads working, local backend, anonymous auth"`)
+- [x] Add troubleshooting entries: Firestore index fix, ffmpeg PATH on Windows, ngrok static domain setup
+- [x] Commit all v1.1.0 changes to git (`git add -A && git commit -m "v1.1.0: downloads working, local backend, anonymous auth"`)
 
-### v1.3.0 — Distribution & Monetisation
+### v1.3.0 — Distribution (No Apple Dev Account) *(current)*
 
-**Sprint 1 — Real Builds 🔴**
-- [ ] Google Sign-In via EAS Build — removes Expo Go + `npx expo start` dependency, fixes `redirect_uri_mismatch`
-- [ ] Remove anonymous dev login button before release (`__DEV__` guard only — must not ship to users)
-- [ ] iOS build distributed via TestFlight
-- [ ] Android build distributed via Google Play internal track
+> **Goal:** Let people actually install and use the app on their phones — Android via a sideloadable APK, iPhone via a browser-based PWA. No Apple Developer account required. Google Sign-In works in both tracks.
 
-**Sprint 2 — Payments & Plans 🟡**
-- [ ] Implement Free plan enforcement — cap at 10 stored files, prompt to delete or upgrade
-- [ ] Implement Pro plan — one-time $9.99 purchase, no file limit, 10 downloads/day cap
-- [ ] iOS in-app purchase via Apple StoreKit
-- [ ] Android in-app purchase via Google Play Billing
-- [ ] Plan status verified in Firestore on app launch
+**Track 1 — Android APK ✅ Complete**
+- [x] Set up EAS Build (free tier) — `eas build:configure` in `mobile/`; EAS project linked as `@ivibudh/pockettube`
+- [x] Created Android keystore via `eas credentials --platform android` → profile `pockettube-android-preview`; keystore managed by EAS
+- [x] Registered Android OAuth client in Google Cloud Console — package `com.pockettube.app` + SHA-1 from EAS keystore
+- [x] Added Android app to Firebase project → downloaded `google-services.json` → added to `mobile/` and referenced in `app.json`; gitignored to keep API key out of version control
+- [x] Switched Google Sign-In from `expo-auth-session` (browser-based, blocked by Google's redirect URI policy) to `@react-native-google-signin/google-signin` (native Android SDK — no redirect URI needed, verified by package name + SHA-1)
+- [x] Removed anonymous dev login button from `LoginScreen.js`
+- [x] Generated APK via `eas build --platform android --profile preview` (build #3)
+- [x] Google Sign-In confirmed working end-to-end on real Android device ✅
+- [x] APK available for sideloading — see **Install App on Android** section below
 
-### v1.4.0 — iOS Platform Fixes
+**Track 2 — iPhone PWA 🟡**
+
+> iOS Safari cannot read files the app previously saved — playback works by streaming from the backend (computer must be on) or the user picks a file from the Files app manually. No Apple account needed.
+
+- [ ] Scaffold a React web app (`web/`) — reuses existing Firebase config and backend API
+- [ ] Implement Google Sign-In via standard web OAuth (`signInWithPopup` / `signInWithRedirect`) — works without any Apple account
+- [ ] Download flow: paste URL → backend downloads → file served as a browser download to iPhone Files/Downloads folder
+- [ ] Audio player — HTML5 `<audio>` with play/pause, seek bar, speed selector; background playback via Media Session API
+- [ ] Video player — HTML5 `<video>` with native controls
+- [ ] File picker fallback — `<input type="file">` so user can load a previously saved file for playback
+- [ ] PWA manifest + icons so Safari shows "Add to Home Screen" prompt
+- [ ] Deploy to Vercel or Netlify (free tier) — permanent public URL, no server needed
+- [ ] Test on iPhone: install to home screen, download a file, play it back
+
+### v1.4.0 — Stripe Payments
+
+> **Why Stripe and not Apple StoreKit / Google Play Billing:** Because PocketTube is distributed as a sideloaded APK and a PWA — not through the App Store or Play Store — neither platform can enforce their payment rules or take their 15–30% cut. Stripe charges a flat 2.9% + 30¢ per transaction with no monthly fee, has a free sandbox for development, and its hosted Checkout page means you build no payment UI at all.
+
+**Sprint 1 — Backend: Stripe Integration 🔴**
+- [ ] Create a free Stripe account at stripe.com — get test API keys from the dashboard
+- [ ] Add `stripe` npm package to `backend/` — `npm install stripe`
+- [ ] Add `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` to `backend/.env` and Render env vars
+- [ ] Add `POST /api/payments/create-checkout-session` route — creates a Stripe Checkout session for the $9.99 Pro plan and returns the session URL
+- [ ] Add `POST /api/payments/webhook` route — listens for `checkout.session.completed` event and updates `plan: 'pro'` in Firestore for the relevant user
+- [ ] Register the webhook endpoint in the Stripe dashboard (use ngrok URL for local testing)
+- [ ] Test the full payment flow end-to-end in Stripe test mode
+
+**Sprint 2 — Frontend: Upgrade Flow 🟡**
+- [ ] Add plan status read from Firestore on app launch — stored under `users/{uid}/meta/plan`
+- [ ] Add "Upgrade to Pro" button in the side menu (shown only to Free users)
+- [ ] On tap: call `/api/payments/create-checkout-session` → redirect to Stripe Checkout URL (browser on PWA; external browser on Android APK)
+- [ ] Add success and cancel redirect pages — success page confirms upgrade and links back to the app
+- [ ] Enforce Free plan cap (10 stored files) — show upgrade prompt when limit is reached
+- [ ] Show current plan badge in the side menu (Free / Pro)
+- [ ] Test upgrade flow on both PWA (iPhone) and Android APK
+
+### v1.5.0 — iOS Platform Fixes
 
 **iOS-specific bugs that were not resolved by the v1.2.0 fixes. Require deeper investigation on a real device build (not Expo Go).**
 
-- [ ] Fix background audio on iOS — investigate `expo-audio` AVAudioSession category interaction with Expo Go; likely needs a custom EAS build to test properly
+- [ ] Fix background audio on iOS and Android — investigate `expo-audio` AVAudioSession (iOS) and audio focus (Android) interaction with Expo Go; likely needs a custom EAS build to test properly
 - [ ] Fix video playback on iOS — investigate `expo-video` / AVFoundation codec compatibility; check whether H.265/HEVC or container issues are the root cause on device
+
+---
+
+## 📲 Install App on Android
+
+> Sideload the APK directly onto any Android phone — no Play Store, no account needed.
+
+**Scan the QR code or open the link below:**
+
+🔗 [Download APK — build #3 (v1.3.0)](https://expo.dev/accounts/ivibudh/projects/pockettube/builds/fa3e5af0-6fbb-47eb-8eb4-96df495feed4)
+
+**Steps to install:**
+1. Open the link above on your Android phone and download the `.apk` file
+2. Go to **Settings → Security** (or Apps, depending on manufacturer) → enable **"Install from unknown sources"** for your browser or Files app
+3. Tap the downloaded `.apk` file to install
+4. Open PocketTube and sign in with your Google account
+
+> ⚠️ If you see a warning like "App not installed" or "Blocked by Play Protect", tap **"Install anyway"** — this is expected for sideloaded APKs that aren't from the Play Store.
+
+---
+
+## 📦 How to Build the Android APK
+
+> Run these from inside the `mobile/` folder. EAS builds happen in the cloud — your machine just needs to upload the code.
+
+### First-time setup (already done — notes for reference)
+
+| Step | What was done |
+|---|---|
+| EAS project | `eas login` + `eas build:configure` → linked to `@ivibudh/pockettube` |
+| Android keystore | `eas credentials --platform android` → profile `pockettube-android-preview`; managed by EAS |
+| Google OAuth (Android) | Created Android client in Google Cloud Console with package `com.pockettube.app` + SHA-1 from EAS keystore |
+| Firebase Android app | Added Android app in Firebase console → downloaded `google-services.json` → placed in `mobile/` |
+| Google Sign-In SDK | Installed `@react-native-google-signin/google-signin`; configured with web client ID in `LoginScreen.js` |
+
+### Building a new APK
+
+```bash
+# 1. Bump versionCode in mobile/app.json (must increment every build)
+#    "versionCode": <current + 1>
+
+# 2. Commit your changes
+git add -A
+git commit -m "vX.X.X: description of changes"
+
+# 3. Trigger the cloud build
+cd mobile
+eas build --platform android --profile preview
+```
+
+The build takes ~10–15 minutes. EAS provides a link to monitor progress and download the APK when done.
+
+### Installing the APK on an Android device
+
+1. Download the `.apk` from the EAS build page
+2. Send it to the device (email, Google Drive, USB)
+3. On the device: Settings → Security → enable **"Install from unknown sources"** for the browser or Files app
+4. Tap the downloaded `.apk` to install
+
+### What `google-services.json` is and why it's gitignored
+
+`google-services.json` contains a Firebase API key tied to the Android app. It is intentionally excluded from git (see `mobile/.gitignore`). EAS builds work without it being committed because the Android OAuth client is verified by **package name + SHA-1 fingerprint** (not by the file itself). Keep a copy of `google-services.json` locally — if you lose it, re-download it from Firebase Console → Project Settings → Your Apps → Android app.
+
+### Troubleshooting Google Sign-In on Android
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `DEVELOPER_ERROR` on sign-in | SHA-1 fingerprint mismatch | Re-run `eas credentials --platform android` → verify the SHA-1 matches what's in Google Cloud Console → Android OAuth client |
+| Sign-in cancelled immediately | Google Play Services not available | Test on a real Android device, not an emulator without Play Services |
+| `No ID token returned` | webClientId mismatch | Verify `webClientId` in `LoginScreen.js` matches the **Web** client ID (not Android) in Google Cloud Console |
 
 ---
 
@@ -164,8 +270,8 @@ These are not bugs — they are current constraints of the v1.1.0 build. Each on
 | Limitation | Status | Planned Fix |
 |---|---|---|
 | Google Sign-In blocked in Expo Go | Google rejects `exp://` redirect URIs | v1.3.0 — EAS Build + TestFlight |
-| Video player shows audio only (iOS) | iOS AVFoundation / expo-video codec issue | v1.4 investigation |
-| Audio stops on screen lock (iOS) | iOS audio session behaviour in Expo Go | v1.4 investigation |
+| Video player shows audio only (iOS) | iOS AVFoundation / expo-video codec issue | v1.5 investigation |
+| Audio stops on screen lock (iOS and Android) | Audio session behaviour in Expo Go | v1.5 investigation |
 | ~~Video player shows audio only (Android)~~ | ~~yt-dlp format merge issue~~ | ✅ Fixed in v1.2.0 — H.264 + faststart |
 | ~~No lock screen / Control Center controls~~ | ~~NowPlayingInfo not wired up~~ | ✅ Fixed in v1.2.0 — wired via PlayerContext |
 | ~~Speed selector cycles one-by-one~~ | ~~No modal picker yet~~ | ✅ Fixed in v1.1.0 |
@@ -178,7 +284,15 @@ These are not bugs — they are current constraints of the v1.1.0 build. Each on
 
 ## 📋 Changelog
 
-### v1.2.0 *(in progress — 2026-05-10)*
+### v1.3.0 *(2026-05-12)*
+- Set up EAS Build for Android; keystore managed by EAS under profile `pockettube-android-preview`
+- Added Android app to Firebase; `google-services.json` gitignored (kept local, not committed)
+- Switched Google Sign-In to `@react-native-google-signin/google-signin` native SDK — replaces `expo-auth-session` browser-based flow which was rejected by Google's OAuth 2.0 redirect URI policy
+- Android OAuth client registered in Google Cloud Console (package `com.pockettube.app` + SHA-1)
+- Removed anonymous dev login button from `LoginScreen.js`
+- Google Sign-In confirmed working end-to-end on real Android device (build #3) ✅
+
+### v1.2.0 *(2026-05-10)*
 - Switched tunnel from Cloudflare ad-hoc to ngrok free static domain — `constants.js` URL is now permanent
 - Fixed Firestore `failed-precondition` crash when filtering Library by playlist (client-side sort workaround)
 - Applied fixes for background audio and video picture (under investigation — not yet resolved on device)
@@ -254,14 +368,14 @@ The media player is a core part of the app — both audio and video files should
 - **Pro plan** — one-time payment of **$9.99 + applicable taxes**, no subscription; Pro users have no limit on total stored files but are capped at **10 new downloads per day** to stay within backend resource limits
 - Plan status is stored in Firestore and verified on app launch
 
-> 💳 **Payment implementation — placeholder for a future release.** In-app purchases on iOS require Apple's StoreKit and on Android require Google Play Billing — both platforms take a 15–30% cut of each transaction. No additional third-party payment library is planned at this stage; native platform IAP is the simplest path with no extra fees beyond the store's standard cut. This feature will be scoped and implemented in a dedicated release.
+> 💳 **Payment implementation planned for v1.4.0 via Stripe.** Because PocketTube distributes as a sideloaded APK and a PWA — not through the App Store or Play Store — neither Apple StoreKit nor Google Play Billing is required. Stripe handles the full payment flow at 2.9% + 30¢ per transaction (no monthly fee, no platform cut). Stripe Checkout is a hosted payment page: the backend creates a session, the app redirects the user there, and a webhook updates Firestore when payment completes.
 
 ### 🗂️ Playlists *(tentative — may not be included in v1)*
 - Optionally organize downloads into playlist categories: Music, Podcasts, Sleep, Focus, Language, Videos, General
 
 ### ☁️ Infrastructure
 - Metadata synced to Firestore across devices
-- Runs entirely on free tiers (except Apple Developer account and payment processing fees)
+- Runs entirely on free tiers (payment processing fees apply only when Stripe is active in v1.4.0)
 
 ---
 
@@ -275,7 +389,7 @@ The media player is a core part of the app — both audio and video files should
 | File Storage | Device-local only (no cloud storage) | Free |
 | Download Engine | yt-dlp + Node.js backend | Free |
 | Cloud Hosting | Render.com | Free tier (750 hrs/month) |
-| In-App Payments | Apple StoreKit + Google Play Billing *(future release)* | 15–30% platform cut per transaction |
+| Payments | Stripe Checkout *(v1.4.0)* | 2.9% + 30¢ per transaction — no platform cut (not distributed via App Store / Play Store) |
 | iOS Distribution | TestFlight (personal) | $99/yr — Apple Dev account |
 
 ---
@@ -1598,6 +1712,8 @@ Sprint 2 of v1.2.0 sets up a named Cloudflare Tunnel with a permanent subdomain.
 | Render deploy succeeds but health check fails | `PORT` env var not set | Set `PORT=8080` in Render dashboard → Environment |
 | `Invalid or expired token` from backend | `FIREBASE_SERVICE_ACCOUNT` env var missing or corrupted | Generate the base64 value with `node -e "console.log(Buffer.from(JSON.stringify(require('./firebase-service-account.json'))).toString('base64'))"` and set it in Render environment variables. |
 | Google sign-in "Error 400: redirect_uri_mismatch" in Expo Go | Google rejects `exp://` redirect URIs — they're not a valid public top-level domain | This is a fundamental Expo Go limitation. Google Sign-In won't work in Expo Go regardless of what you register. Use the **⚠️ Dev Login (anonymous)** button on the login screen (visible in `__DEV__` mode only) to sign in with Firebase Anonymous Auth and test the rest of the app. Real Google Sign-In works once you create a development build (TestFlight). **Remove the dev button before releasing.** |
+| Google sign-in "Error 400: invalid_request" or "Authorization Error" in EAS APK | `expo-auth-session` browser-based OAuth flow sends a custom URI scheme (`pockettube://`) as the redirect URI — Google's OAuth 2.0 policy rejects any redirect URI that is not an `https://` URL | Switched to `@react-native-google-signin/google-signin` native SDK (v1.3.0). The native SDK uses the Android OAuth client verified by package name + SHA-1 fingerprint — no redirect URI involved. Do not attempt to use `expo-auth-session` or `makeRedirectUri({ useProxy: true })` for native Android EAS builds. |
+| Google sign-in `DEVELOPER_ERROR` in EAS APK | SHA-1 fingerprint in Google Cloud Console does not match the EAS keystore | Run `eas credentials --platform android` → select `pockettube-android-preview` → copy the SHA-1. Go to Google Cloud Console → Credentials → PocketTube Android → verify the SHA-1 matches exactly. |
 | Google sign-in error | Wrong client ID | Double-check all 3 OAuth client IDs match |
 | File not found on phone | Wrong `localUri` | Log `FileSystem.documentDirectory` to verify path |
 | Audio won't play in background | Missing plist key | Add `UIBackgroundModes: ["audio"]` to `app.json` |
@@ -1606,6 +1722,9 @@ Sprint 2 of v1.2.0 sets up a named Cloudflare Tunnel with a permanent subdomain.
 | Expo Go can't connect to dev server | Phone and computer on different networks | Run `npx expo start --tunnel` instead of the default LAN mode |
 | App disappears after closing Expo Go | Expected — Expo Go streams from dev server | Restart `npx expo start` and re-scan QR code to re-launch |
 | QR code won't scan | Camera permissions or lighting | Use the "Enter URL manually" option in Expo Go instead |
+| Library crashes when filtering by a playlist | Firestore `failed-precondition` — composite index required for `where('playlist')` + implicit ordering | Two options: (1) Go to Firebase Console → Firestore → Indexes → Add composite index on `playlist` (asc) + `createdAt` (desc) for the `media` collection. (2) Simpler workaround already applied in v1.2.0 — fetch all docs without `orderBy`, then sort client-side in JavaScript after the snapshot arrives. |
+| yt-dlp fails with "ffmpeg not found" on Windows | ffmpeg installed via winget but not on the PATH that Node.js inherits | Run `where ffmpeg` in a terminal to find the install path (e.g. `C:\Users\<you>\AppData\Local\Microsoft\WinGet\Packages\...\ffmpeg.exe`). Add `--ffmpeg-location "C:\full\path\to\ffmpeg.exe"` to the yt-dlp command in `backend/src/utils/ytdlp.js`. |
+| BACKEND_URL in `constants.js` needs updating every ngrok restart | Using an ad-hoc ngrok tunnel (no `--domain` flag) which generates a random subdomain each session | Create a free ngrok account at ngrok.com, claim a free static domain under Dashboard → Domains, then always start the tunnel with `ngrok http --domain=your-static-domain.ngrok-free.app 8080`. Update `constants.js` once with this permanent URL — it never changes again. |
 
 ---
 

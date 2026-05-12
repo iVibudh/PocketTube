@@ -1,9 +1,10 @@
 import React, { useState, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ScrollView, Alert, ActivityIndicator, Image, Animated,
+  ScrollView, Alert, ActivityIndicator, Image, Animated, Platform,
 } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
+import * as MediaLibrary from 'expo-media-library';
 import { collection, addDoc, query, where, getDocs, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import { COLORS, PLAYLISTS, BACKEND_URL } from '../constants';
@@ -121,6 +122,19 @@ export default function DownloadScreen() {
       if (dlRes.status !== 200) throw new Error('File transfer failed');
       animateProgress(100);
 
+      // Save to device library:
+      //   - Videos: iOS Photos + Android Gallery
+      //   - Audio:  Android Gallery only (iOS MediaLibrary doesn't support audio)
+      let savedToLibrary = false;
+      const shouldSaveToLibrary = format === 'video' || Platform.OS === 'android';
+      if (shouldSaveToLibrary) {
+        const { status } = await MediaLibrary.requestPermissionsAsync();
+        if (status === 'granted') {
+          await MediaLibrary.saveToLibraryAsync(dlRes.uri);
+          savedToLibrary = true;
+        }
+      }
+
       await addDoc(collection(db, `users/${user.uid}/media`), {
         filename: job.result.filename, localUri, format,
         resolution: format === 'video' ? resolution : null,
@@ -128,11 +142,15 @@ export default function DownloadScreen() {
         title: info?.title ?? job.result.filename,
         channel: info?.channel ?? '', uploadDate: info?.uploadDate ?? null,
         duration: info?.duration ?? null, thumbnailUrl: info?.thumbnailUrl ?? null,
+        savedToLibrary,
         downloadedAt: serverTimestamp(),
       });
 
       setPhase('done');
-      Alert.alert('Download complete ✅', `"${info?.title ?? 'File'}" saved to ${playlist}`);
+      const libraryNote = savedToLibrary
+        ? `\n\nAlso saved to your ${Platform.OS === 'ios' ? 'Photos' : 'Gallery'}.`
+        : '';
+      Alert.alert('Download complete ✅', `"${info?.title ?? 'File'}" saved to ${playlist}.${libraryNote}`);
       setUrl(''); setInfo(null); setPhase('idle'); animateProgress(0);
     } catch (err) {
       setPhase('ready'); Alert.alert('Download failed', err.message);
