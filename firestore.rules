@@ -1,0 +1,60 @@
+rules_version = '2';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PocketTube — Firestore Security Rules
+//
+// Data model:
+//   users/{uid}/media/{mediaId}      ← downloaded items (audio / video)
+//   users/{uid}/meta/plan            ← { plan: 'free' | 'pro' }
+//   users/{uid}/meta/stats           ← download counters, playback minutes, etc.
+//   users/{uid}/meta/playlists       ← { lists: [...], created: timestamp }
+//
+// Rules:
+//   • Only the authenticated owner (request.auth.uid == uid) may read or write
+//     their own documents.
+//   • The backend uses Firebase Admin SDK which bypasses these rules — so plan
+//     upgrades written by the Stripe webhook (v1.6.0) are always allowed.
+//   • Every path not explicitly matched is denied by the catch-all at the root.
+// ─────────────────────────────────────────────────────────────────────────────
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Owner-only helper ───────────────────────────────────────────────────
+    // Returns true only when the request comes from a signed-in user whose
+    // UID matches the {uid} wildcard in the path.
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    // ── users/{uid}/media — downloaded media items ──────────────────────────
+    // Read:   owner only (list + get)
+    // Create: owner only — must include required fields
+    // Update: owner only
+    // Delete: owner only
+    match /users/{uid}/media/{mediaId} {
+      allow read, delete: if isOwner(uid);
+
+      allow create: if isOwner(uid)
+        && request.resource.data.keys().hasAll(['sourceUrl', 'format', 'downloadedAt'])
+        && request.resource.data.format in ['audio', 'video'];
+
+      allow update: if isOwner(uid);
+    }
+
+    // ── users/{uid}/meta — plan, stats, playlists ───────────────────────────
+    // All three sub-documents live here. Owner can read and write any of them.
+    // The 'plan' document is also written by the backend (Admin SDK bypasses
+    // rules) when a Stripe payment completes.
+    match /users/{uid}/meta/{document} {
+      allow read, write: if isOwner(uid);
+    }
+
+    // ── Deny-all fallback ───────────────────────────────────────────────────
+    // Any path not matched above is denied. This is implicit in Firestore but
+    // stated explicitly here for clarity and to satisfy a future audit.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

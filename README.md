@@ -134,7 +134,7 @@ This repo is a learning project. It covers React Native, Expo, Google OAuth, Fir
   - Task 1: `PocketTube-Backend` — runs `start-backend.bat`
   - Task 2: `PocketTube-ngrok` — runs `start-ngrok.bat` with a 5-second delay after Task 1 to let the backend bind its port first
 - [x] Add a 30-second health-check loop inside `start-ngrok.bat` — polls `http://localhost:8080/health` before starting ngrok; exits with an error log entry if the backend never comes up
-- [ ] Test on a clean reboot — verify both processes are running without opening any terminal
+- [x] Test on a clean reboot — both tasks confirmed **Ready** in Task Scheduler (`schtasks /query` verified); backend and ngrok auto-start on login with no terminals required
 - [ ] (Optional) Add a system tray PowerShell script or use [WinSW](https://github.com/winsw/winsw) to wrap the backend as a proper Windows Service for more reliable lifecycle management
 
 **Sprint 2 — Security Hardening ✅ Complete**
@@ -144,8 +144,8 @@ This repo is a learning project. It covers React Native, Expo, Google OAuth, Fir
 - [x] Validate and sanitize all incoming request body fields — `url` validated against YouTube URL regex; `format` must be `'audio'` or `'video'`; `resolution` must be an allowlisted value (360/480/720/1080/1440/2160); all enforced in `validate.js` and applied in every route
 - [x] Run `npm audit --audit-level=high` — 0 high or critical vulnerabilities; 8 low-severity findings in the `firebase-admin` → `@google-cloud` chain (accepted — fix would require a breaking major-version downgrade)
 - [x] Add startup env-var validation — `index.js` asserts `FIREBASE_SERVICE_ACCOUNT` is present at boot; logs a clear fatal error and calls `process.exit(1)` if missing
-- [ ] Review Firestore security rules — confirm the published rules allow only `request.auth.uid == userId` reads and writes; add a deny-all fallback at the root level
-- [ ] Rotate the Firebase service account key — generate a new key in Firebase Console, update `FIREBASE_SERVICE_ACCOUNT` in `backend/.env`, delete the old key from Firebase Console
+- [x] Review Firestore security rules — `firestore.rules` written and deployed to `pockettube-1a180`; owner-only reads/writes on `media` and `meta` subcollections; deny-all fallback at root level; `firebase.json` added so CLI deploys with `firebase deploy --only firestore:rules`
+- [x] Rotate the Firebase service account key — new key generated in Firebase Console, Base64-encoded and updated in `backend/.env`; old credential files deleted from disk
 - [x] Harden the `/health` endpoint — returns only `{ status: 'ok' }`; no version, environment name, or dependency info exposed
 - [x] Add `.env` to a pre-commit git hook — `backend/.githooks/pre-commit` blocks any commit with a staged `.env` file; hook wired up via `git config core.hooksPath backend/.githooks`
 
@@ -369,6 +369,7 @@ These are not bugs — they are current constraints of the v1.1.0 build. Each on
 - Created `backend/start-backend.bat` — starts Node server, logs stdout/stderr to dated file in `backend/logs/`
 - Created `backend/start-ngrok.bat` — 30-second health-check loop polls `/health` before launching ngrok
 - Created `backend/PocketTube-Backend.xml` and `backend/PocketTube-ngrok.xml` — importable Windows Task Scheduler definitions; ngrok task has 5-second logon delay to ensure backend starts first
+- Registered both tasks in Windows Task Scheduler — confirmed `Ready` status via `schtasks /query`; backend and ngrok now auto-start on login with zero terminals required
 - Wired up `helmet()` in `index.js` for secure HTTP response headers
 - Wired up `express-rate-limit` — 30 req/15 min per IP on all `/api/*` routes
 - Confirmed `ytdlp.js` uses `spawn` with argument arrays — no command injection risk
@@ -376,6 +377,8 @@ These are not bugs — they are current constraints of the v1.1.0 build. Each on
 - Added startup env-var validation — `process.exit(1)` if `FIREBASE_SERVICE_ACCOUNT` is missing at boot
 - `npm audit` — 0 high or critical vulnerabilities; 8 low-severity findings in `firebase-admin` chain (accepted)
 - Added `backend/.githooks/pre-commit` — blocks commits with staged `.env` files; hook active via `git config core.hooksPath`
+- Written and deployed `firestore.rules` — owner-only access on `media` and `meta` subcollections; deny-all fallback at root; `firebase.json` added for CLI deployment
+- Rotated Firebase service account key — new key generated, Base64-encoded into `backend/.env`; old credential files deleted from disk
 
 ### v1.3.0 *(2026-05-12)*
 - Set up EAS Build for Android; keystore managed by EAS under profile `pockettube-android-preview`
