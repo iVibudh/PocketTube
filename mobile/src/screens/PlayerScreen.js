@@ -13,7 +13,7 @@
  *  ◆ Lock-screen / Control-Center controls via setNowPlayingInfo in context
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import {
   View, Text, Image, TouchableOpacity, StyleSheet,
   Dimensions, PanResponder, Modal, FlatList, Pressable,
@@ -21,8 +21,22 @@ import {
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { doc, updateDoc, increment } from 'firebase/firestore';
+import { auth, db } from '../firebase';
 import { usePlayerContext } from '../context/PlayerContext';
 import { COLORS } from '../constants';
+
+// ── Stats helper ──────────────────────────────────────────────────────────────
+// Adds elapsed minutes to the user's totalPlaybackMinutes counter.
+// Defined at module level so useEffect cleanup closures always have a stable ref.
+async function recordPlayback(minutes) {
+  const user = auth.currentUser;
+  if (!user || minutes < 0.1) return;   // ignore sub-6-second fragments
+  try {
+    const ref = doc(db, `users/${user.uid}/meta`, 'stats');
+    await updateDoc(ref, { totalPlaybackMinutes: increment(Math.round(minutes)) });
+  } catch (_) {}
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -85,6 +99,32 @@ function AudioPlayer({ fallbackItem }) {
     hasNext,
     hasPrev,
   } = usePlayerContext();
+
+  // ── Playback time tracking ────────────────────────────────────────────────
+  // playStartRef holds the timestamp (ms) when the current play session began.
+  const playStartRef = useRef(null);
+
+  // Start / stop the clock whenever playing state changes.
+  useEffect(() => {
+    if (status.playing) {
+      if (!playStartRef.current) playStartRef.current = Date.now();
+    } else {
+      if (playStartRef.current) {
+        recordPlayback((Date.now() - playStartRef.current) / 60000);
+        playStartRef.current = null;
+      }
+    }
+  }, [status.playing]);
+
+  // Flush any remaining time when the user navigates away.
+  useEffect(() => {
+    return () => {
+      if (playStartRef.current) {
+        recordPlayback((Date.now() - playStartRef.current) / 60000);
+        playStartRef.current = null;
+      }
+    };
+  }, []);
 
   // Use live currentTrack from context (updates on auto-advance / prev-next).
   // Fall back to route param only on the very first render if context is cold.
@@ -241,6 +281,14 @@ function VideoPlayer({ item }) {
   const player = useVideoPlayer({ uri: item.localUri }, p => {
     p.loop = false;
   });
+
+  // ── Playback time tracking (mount-based approximation for video) ──────────
+  const mountTimeRef = useRef(Date.now());
+  useEffect(() => {
+    return () => {
+      recordPlayback((Date.now() - mountTimeRef.current) / 60000);
+    };
+  }, []);
 
   const handleSelectSpeed = (s) => {
     setSpeed(s);

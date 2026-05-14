@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { getVideoInfo } = require('../utils/ytdlp');
+const { isValidYouTubeUrl } = require('../utils/validate');
 
 /**
  * POST /api/info
@@ -24,6 +25,7 @@ const { getVideoInfo } = require('../utils/ytdlp');
 router.post('/', async (req, res) => {
   const { url } = req.body;
   if (!url) return res.status(400).json({ error: 'url is required' });
+  if (!isValidYouTubeUrl(url)) return res.status(400).json({ error: 'url must be a valid YouTube URL' });
 
   try {
     const info = await getVideoInfo(url);

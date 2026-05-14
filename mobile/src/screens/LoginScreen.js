@@ -58,7 +58,7 @@ export default function LoginScreen() {
 
       <View style={styles.footer}>
         <Text style={styles.disclaimer}>For personal use only · Not affiliated with YouTube</Text>
-        <Text style={styles.version}>Version 1.3.0</Text>
+        <Text style={styles.version}>Version 1.5.0</Text>
       </View>
     </View>
   );

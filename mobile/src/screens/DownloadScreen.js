@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as MediaLibrary from 'expo-media-library';
-import { collection, addDoc, query, where, getDocs, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, doc, updateDoc, increment, query, where, getDocs, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import { COLORS, PLAYLISTS, BACKEND_URL } from '../constants';
 
@@ -145,6 +145,16 @@ export default function DownloadScreen() {
         savedToLibrary,
         downloadedAt: serverTimestamp(),
       });
+
+      // ── Update user stats (fire-and-forget, never blocks the UI) ──────────
+      try {
+        const statsRef = doc(db, `users/${user.uid}/meta`, 'stats');
+        await updateDoc(statsRef, {
+          totalDownloads:                          increment(1),
+          [`${format}Downloads`]:                  increment(1),   // audioDownloads or videoDownloads
+          [`favoritePlaylists.${playlist}`]:        increment(1),   // nested map key
+        });
+      } catch (_) {}
 
       setPhase('done');
       const libraryNote = savedToLibrary

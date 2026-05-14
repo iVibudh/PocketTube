@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-16"?>
+<!--
+  PocketTube-Backend.xml
+  ─────────────────────
+  Imports the "PocketTube-Backend" scheduled task into Windows Task Scheduler.
+
+  HOW TO IMPORT:
+    1. Open Task Scheduler (search "Task Scheduler" in Start)
+    2. Action menu → Import Task...
+    3. Select this file
+    4. Review and click OK
+    - OR -
+    Run from an admin CMD/PowerShell:
+      schtasks /create /xml "PocketTube-Backend.xml" /tn "PocketTube-Backend"
+
+  WHAT IT DOES:
+    Runs start-backend.bat at user logon with highest privileges so it can
+    bind port 8080 without UAC prompts. Output is logged to backend\logs\.
+
+  IMPORTANT — update the path below before importing:
+    Replace  C:\Users\vibud\Desktop\02-01-Github\02-PocketTube\PocketTube\backend
+    with the actual path to your backend\ folder if it ever moves.
+-->
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Description>Starts the PocketTube Node.js backend at user logon.</Description>
+    <Author>PocketTube</Author>
+  </RegistrationInfo>
+  <Triggers>
+    <LogonTrigger>
+      <Enabled>true</Enabled>
+      <!-- Fires for any user; lock to your account by setting <UserId> here -->
+    </LogonTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <LogonType>InteractiveToken</LogonType>
+      <RunLevel>HighestAvailable</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
+    <Priority>7</Priority>
+  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <Command>C:\Users\vibud\Desktop\02-01-Github\02-PocketTube\PocketTube\backend\start-backend.bat</Command>
+      <WorkingDirectory>C:\Users\vibud\Desktop\02-01-Github\02-PocketTube\PocketTube\backend</WorkingDirectory>
+    </Exec>
+  </Actions>
+</Task>
