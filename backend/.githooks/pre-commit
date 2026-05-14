@@ -1,0 +1,30 @@
+#!/bin/sh
+# ─────────────────────────────────────────────────────────────────────────────
+# PocketTube pre-commit hook — guards against accidentally committing .env files
+#
+# SETUP (run once from the repo root or backend/ folder):
+#   git config core.hooksPath backend/.githooks
+#
+# Or, to apply it globally to all your repos:
+#   git config --global core.hooksPath /absolute/path/to/backend/.githooks
+#
+# This hook runs automatically before every `git commit`. If a .env file is
+# staged it prints a clear error and aborts the commit.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Collect any staged files matching *.env or named exactly .env
+STAGED_ENV=$(git diff --cached --name-only | grep -E '(^|/)\.env$|\.env\.')
+
+if [ -n "$STAGED_ENV" ]; then
+  echo ""
+  echo "🚨  COMMIT BLOCKED — .env file detected in staged changes:"
+  echo ""
+  echo "$STAGED_ENV" | sed 's/^/    /'
+  echo ""
+  echo "    .env files contain secrets and must never be committed."
+  echo "    Run:  git reset HEAD <file>   to unstage, then commit again."
+  echo ""
+  exit 1
+fi
+
+exit 0

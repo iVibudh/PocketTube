@@ -57,7 +57,7 @@ This repo is a learning project. It covers React Native, Expo, Google OAuth, Fir
 
 ## ✅ Master Checklist
 
-> **Current version: 1.5.0 ✅** · Targeting: **1.6.0** · Planned: **1.7.0, 1.8.0**
+> **Current version: 1.6.0** · Completed: **1.0–1.5 ✅, 1.4 ✅** · Planned: **1.7.0, 1.8.0**
 
 ### v1.0.0 — Initial Build
 
@@ -123,31 +123,31 @@ This repo is a learning project. It covers React Native, Expo, Google OAuth, Fir
 
 > iPhone PWA support has been deferred to v1.7.0 to allow backend stability and security work (v1.4.0), sidebar & stats (v1.5.0), and Stripe payments (v1.6.0) to land first.
 
-### v1.4.0 — Backend Auto-Start & Security Hardening
+### v1.4.0 — Backend Auto-Start & Security Hardening ✅ Complete
 
 > **Goal:** Eliminate the manual startup ritual — the backend and ngrok tunnel should start automatically when the PC boots. Simultaneously harden the backend against abuse and common vulnerabilities, since the ngrok URL is the only thing standing between the open internet and your yt-dlp process.
 
-**Sprint 1 — Windows Auto-Start 🔴**
-- [ ] Create `backend/start-backend.bat` — launches `node src/index.js` from the correct directory; writes stdout/stderr to a dated log file in `backend/logs/` so you can inspect what happened on boot
-- [ ] Create `backend/start-ngrok.bat` — runs `ngrok http --domain=tropics-proton-unbitten.ngrok-free.dev 8080`; also logs output
-- [ ] Register both scripts with **Windows Task Scheduler** to run at user logon (trigger: "At log on" → run whether user is logged on or not → highest privileges)
+**Sprint 1 — Windows Auto-Start ✅ Complete**
+- [x] Create `backend/start-backend.bat` — launches `node src/index.js` from the correct directory; writes stdout/stderr to a dated log file in `backend/logs/` so you can inspect what happened on boot
+- [x] Create `backend/start-ngrok.bat` — runs `ngrok http --domain=tropics-proton-unbitten.ngrok-free.dev 8080`; also logs output
+- [x] Register both scripts with **Windows Task Scheduler** to run at user logon — `PocketTube-Backend.xml` and `PocketTube-ngrok.xml` are importable via Task Scheduler → Action → Import Task; ngrok task has a 5-second logon delay so the backend always starts first
   - Task 1: `PocketTube-Backend` — runs `start-backend.bat`
   - Task 2: `PocketTube-ngrok` — runs `start-ngrok.bat` with a 5-second delay after Task 1 to let the backend bind its port first
-- [ ] Add a 30-second health-check loop inside `start-ngrok.bat` — polls `http://localhost:8080/health` before starting ngrok; exits with an error log entry if the backend never comes up
+- [x] Add a 30-second health-check loop inside `start-ngrok.bat` — polls `http://localhost:8080/health` before starting ngrok; exits with an error log entry if the backend never comes up
 - [ ] Test on a clean reboot — verify both processes are running without opening any terminal
 - [ ] (Optional) Add a system tray PowerShell script or use [WinSW](https://github.com/winsw/winsw) to wrap the backend as a proper Windows Service for more reliable lifecycle management
 
-**Sprint 2 — Security Hardening 🟡**
-- [ ] Install and wire up `helmet` middleware — sets secure HTTP response headers (X-Frame-Options, X-Content-Type-Options, Strict-Transport-Security, etc.) with a single `app.use(helmet())`
-- [ ] Install and configure `express-rate-limit` — apply a per-IP rate limit on all `/api/*` routes (e.g. 30 requests per 15 minutes) to prevent abuse if the ngrok URL ever leaks
-- [ ] Fix command injection risk in `ytdlp.js` — replace all shell string interpolation (`exec(\`yt-dlp ... '${url}'\`)`  ) with argument arrays passed to `execFile` or `spawn` so user-supplied URLs can never escape the argument boundary
-- [ ] Validate and sanitize all incoming request body fields — `url` must match a YouTube URL regex; `format` must be exactly `'audio'` or `'video'`; `resolution` must be an allowlisted string (`'720p'`, `'1080p'`, etc.); reject anything else with 400
-- [ ] Run `npm audit --audit-level=high` inside `backend/` and resolve all high and critical findings; document any accepted low/moderate risks
-- [ ] Add startup env-var validation — on `index.js` load, assert that `FIREBASE_SERVICE_ACCOUNT` and `PORT` are present and non-empty; log a clear error and `process.exit(1)` if missing (fail-fast instead of silent auth failures)
+**Sprint 2 — Security Hardening ✅ Complete**
+- [x] Install and wire up `helmet` middleware — sets secure HTTP response headers (X-Frame-Options, X-Content-Type-Options, Strict-Transport-Security, etc.) with a single `app.use(helmet())`
+- [x] Install and configure `express-rate-limit` — 30 requests per 15 minutes per IP applied to all `/api/*` routes
+- [x] Fix command injection risk in `ytdlp.js` — already using `spawn` with argument arrays; no shell string interpolation present
+- [x] Validate and sanitize all incoming request body fields — `url` validated against YouTube URL regex; `format` must be `'audio'` or `'video'`; `resolution` must be an allowlisted value (360/480/720/1080/1440/2160); all enforced in `validate.js` and applied in every route
+- [x] Run `npm audit --audit-level=high` — 0 high or critical vulnerabilities; 8 low-severity findings in the `firebase-admin` → `@google-cloud` chain (accepted — fix would require a breaking major-version downgrade)
+- [x] Add startup env-var validation — `index.js` asserts `FIREBASE_SERVICE_ACCOUNT` is present at boot; logs a clear fatal error and calls `process.exit(1)` if missing
 - [ ] Review Firestore security rules — confirm the published rules allow only `request.auth.uid == userId` reads and writes; add a deny-all fallback at the root level
 - [ ] Rotate the Firebase service account key — generate a new key in Firebase Console, update `FIREBASE_SERVICE_ACCOUNT` in `backend/.env`, delete the old key from Firebase Console
-- [ ] Harden the `/health` endpoint — return only `{ status: 'ok' }`; remove any version, environment name, or dependency info that could fingerprint the server
-- [ ] Add `.env` to a pre-commit git hook check — confirm it is in `.gitignore` and has never been staged; use `git secrets` or a simple pre-commit shell script
+- [x] Harden the `/health` endpoint — returns only `{ status: 'ok' }`; no version, environment name, or dependency info exposed
+- [x] Add `.env` to a pre-commit git hook — `backend/.githooks/pre-commit` blocks any commit with a staged `.env` file; hook wired up via `git config core.hooksPath backend/.githooks`
 
 ### v1.5.0 — Sidebar & User Stats ✅ Complete
 
@@ -363,6 +363,19 @@ These are not bugs — they are current constraints of the v1.1.0 build. Each on
 ---
 
 ## 📋 Changelog
+
+### v1.6.0 *(2026-05-13)*
+- Implemented v1.4.0 backend auto-start and security hardening
+- Created `backend/start-backend.bat` — starts Node server, logs stdout/stderr to dated file in `backend/logs/`
+- Created `backend/start-ngrok.bat` — 30-second health-check loop polls `/health` before launching ngrok
+- Created `backend/PocketTube-Backend.xml` and `backend/PocketTube-ngrok.xml` — importable Windows Task Scheduler definitions; ngrok task has 5-second logon delay to ensure backend starts first
+- Wired up `helmet()` in `index.js` for secure HTTP response headers
+- Wired up `express-rate-limit` — 30 req/15 min per IP on all `/api/*` routes
+- Confirmed `ytdlp.js` uses `spawn` with argument arrays — no command injection risk
+- Confirmed full input validation in `validate.js` — YouTube URL regex, format allowlist, resolution allowlist
+- Added startup env-var validation — `process.exit(1)` if `FIREBASE_SERVICE_ACCOUNT` is missing at boot
+- `npm audit` — 0 high or critical vulnerabilities; 8 low-severity findings in `firebase-admin` chain (accepted)
+- Added `backend/.githooks/pre-commit` — blocks commits with staged `.env` files; hook active via `git config core.hooksPath`
 
 ### v1.3.0 *(2026-05-12)*
 - Set up EAS Build for Android; keystore managed by EAS under profile `pockettube-android-preview`
