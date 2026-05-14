@@ -57,7 +57,7 @@ This repo is a learning project. It covers React Native, Expo, Google OAuth, Fir
 
 ## ✅ Master Checklist
 
-> **Current version: 1.3.0** · Targeting: **1.4.0** · Planned: **1.5.0, 1.6.0, 1.7.0, 1.8.0**
+> **Current version: 1.5.0 ✅** · Targeting: **1.6.0** · Planned: **1.7.0, 1.8.0**
 
 ### v1.0.0 — Initial Build
 
@@ -149,39 +149,31 @@ This repo is a learning project. It covers React Native, Expo, Google OAuth, Fir
 - [ ] Harden the `/health` endpoint — return only `{ status: 'ok' }`; remove any version, environment name, or dependency info that could fingerprint the server
 - [ ] Add `.env` to a pre-commit git hook check — confirm it is in `.gitignore` and has never been staged; use `git secrets` or a simple pre-commit shell script
 
-### v1.5.0 — Sidebar, User Stats & Recommendations Feed
+### v1.5.0 — Sidebar & User Stats ✅ Complete
 
-> **Goal:** Replace the basic tab bar with a rich side drawer that serves as the app's control centre — account info, navigation, plan status, upgrade CTA, and user stats all in one place. Alongside this, add a Recommendations feed on the Download screen so users always have fresh content to grab.
+> **Goal:** Replace the basic tab bar with a rich side drawer that serves as the app's control centre — account info, navigation, plan status, upgrade CTA, and a live stats dashboard. Recommendations feed deferred to v1.7.0.
 
-**Sprint 1 — Sidebar Navigation & Account 🔴**
-- [ ] Install `@react-navigation/drawer` and `react-native-gesture-handler` / `react-native-reanimated` (required peer deps)
-- [ ] Wrap the root navigator in a `DrawerNavigator`; keep the bottom tab bar for Download and Library but open the drawer via a hamburger icon in the header
-- [ ] Sidebar header: display Google profile photo, display name, and email pulled from `auth.currentUser`
-- [ ] Sidebar nav links: **Download** and **Library** — highlight the active screen
-- [ ] **Sign Out** button at the bottom of the sidebar — calls `signOut(auth)` and navigates back to `LoginScreen`
-- [ ] Plan badge next to the user name: teal **Pro** pill or grey **Free** pill — read from `users/{uid}/meta/plan` in Firestore (default `free` if document doesn't exist)
-- [ ] **Upgrade to Pro →** CTA row shown only to Free users — placeholder alert for now ("Coming in v1.6.0"); will wire to Stripe in v1.6.0
+**Sprint 1 — Sidebar Navigation & Account ✅ Complete**
+- [x] Install `@react-navigation/drawer` and `react-native-gesture-handler` / `react-native-reanimated` (required peer deps)
+- [x] Wrap the root navigator in a `DrawerNavigator`; keep the bottom tab bar for Download and Library but open the drawer via a hamburger icon in the header
+- [x] Sidebar header: display Google profile photo, display name, and email pulled from `auth.currentUser`
+- [x] Sidebar nav links: **Download** and **Library** — highlight the active screen
+- [x] **Sign Out** button at the bottom of the sidebar — calls `signOut(auth)` and navigates back to `LoginScreen`
+- [x] Plan badge next to the user name: teal **Pro** pill or grey **Free** pill — read from `users/{uid}/meta/plan` in Firestore (default `free` if document doesn't exist)
+- [x] **Upgrade to Pro →** CTA row shown only to Free users — placeholder alert for now ("Coming in v1.6.0"); will wire to Stripe in v1.6.0
 
-**Sprint 2 — User Stats Dashboard 🟡**
-- [ ] On first sign-in write `memberSince: serverTimestamp()` to `users/{uid}/meta/stats` (only if the document doesn't already exist — use `setDoc` with `{ merge: true }`)
-- [ ] Increment `totalDownloads`, `audioDownloads`, `videoDownloads` counters in `users/{uid}/meta/stats` on every successful download (use Firestore `increment()`)
-- [ ] Track `totalPlaybackMinutes` — on `PlayerScreen` unmount, add elapsed seconds / 60 to the counter via `increment()`
-- [ ] Track `lastActiveAt` — update to `serverTimestamp()` whenever the app comes to the foreground (use `AppState` listener in `App.js`)
-- [ ] Track `favoritePlaylists` — store a map of `{ [playlistName]: downloadCount }` and increment the relevant key on each download
-- [ ] Add a **Stats** section at the bottom of the sidebar showing:
+**Sprint 2 — User Stats Dashboard ✅ Complete**
+- [x] On first sign-in write `memberSince: serverTimestamp()` to `users/{uid}/meta/stats` (only if the document doesn't already exist — use `setDoc` with `{ merge: true }`)
+- [x] Increment `totalDownloads`, `audioDownloads`, `videoDownloads` counters in `users/{uid}/meta/stats` on every successful download (use Firestore `increment()`)
+- [x] Track `totalPlaybackMinutes` — on `PlayerScreen` unmount, add elapsed seconds / 60 to the counter via `increment()`
+- [x] Track `lastActiveAt` — update to `serverTimestamp()` whenever the app comes to the foreground (use `AppState` listener in `App.js`)
+- [x] Track `favoritePlaylists` — store a map of `{ [playlistName]: downloadCount }` and increment the relevant key on each download
+- [x] Add a **Stats** section at the bottom of the sidebar showing:
   - 📅 Member since (formatted date)
   - 📥 Total downloads (audio + video split)
   - ▶️ Total playback time (hours and minutes)
   - 🎵 Most downloaded playlist
   - 📆 Days since first use
-
-**Sprint 3 — Recommendations Feed 🟠**
-- [ ] Add a **"For You"** tab/section below the URL input on the Download screen (toggle between "Download" and "For You" views)
-- [ ] On each successful download, save `channelName` and `playlist` category to `users/{uid}/meta/stats.channels` map (channel → count) and `stats.recentTags` array (last 20 title keywords, stripped of stop words)
-- [ ] Backend: add `GET /api/recommendations` route — accepts `channels[]` and `tags[]` query params; uses `yt-dlp --flat-playlist --dump-json` to fetch the latest 5 uploads from each of the top 3 channels; returns an array of `{ videoId, title, channel, thumbnailUrl, duration, url }` objects
-- [ ] Mobile: on "For You" tab open, call `/api/recommendations` with the user's top channels; show a scrollable `FlatList` of video cards (thumbnail, title, channel, duration)
-- [ ] Tapping a recommendation card pre-fills the URL input and switches to the Download view — user still chooses format and confirms
-- [ ] Empty state: "Download a few videos first and we'll suggest more from your favourite channels 🎵" — shown when `channels` map is empty
 
 ---
 
@@ -227,6 +219,14 @@ This repo is a learning project. It covers React Native, Expo, Google OAuth, Fir
 - [ ] Add a service worker for basic shell caching (app shell only — media files are too large for cache storage)
 - [ ] Deploy to Vercel or Netlify free tier — permanent `https://` URL, no server needed
 - [ ] Test on iPhone: visit URL in Safari → "Add to Home Screen" → open app → sign in → download a file → play it back
+
+**Sprint 4 — Recommendations Feed 🟣** *(deferred from v1.5.0)*
+- [ ] Add a **"For You"** tab/section below the URL input on the Download screen (toggle between "Download" and "For You" views)
+- [ ] On each successful download, save `channelName` and `playlist` category to `users/{uid}/meta/stats.channels` map (channel → count) and `stats.recentTags` array (last 20 title keywords, stripped of stop words)
+- [ ] Backend: add `GET /api/recommendations` route — accepts `channels[]` and `tags[]` query params; uses `yt-dlp --flat-playlist --dump-json` to fetch the latest 5 uploads from each of the top 3 channels; returns an array of `{ videoId, title, channel, thumbnailUrl, duration, url }` objects
+- [ ] Mobile: on "For You" tab open, call `/api/recommendations` with the user's top channels; show a scrollable `FlatList` of video cards (thumbnail, title, channel, duration)
+- [ ] Tapping a recommendation card pre-fills the URL input and switches to the Download view — user still chooses format and confirms
+- [ ] Empty state: "Download a few videos first and we'll suggest more from your favourite channels 🎵" — shown when `channels` map is empty
 
 ### v1.8.0 — iOS Platform Fixes
 

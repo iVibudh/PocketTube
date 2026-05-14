@@ -6,7 +6,7 @@
 import 'react-native-gesture-handler';
 
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet, AppState } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer, DrawerActions } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -15,7 +15,7 @@ import { createDrawerNavigator } from '@react-navigation/drawer';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, serverTimestamp, increment } from 'firebase/firestore';
 
 import { auth, db } from './src/firebase';
 import { COLORS, PLAYLISTS } from './src/constants';
@@ -122,6 +122,33 @@ async function initUserPlaylists(userId) {
   } catch (_) {}
 }
 
+// Creates the stats document on first sign-in (never overwrites existing data).
+async function initUserStats(userId) {
+  try {
+    const ref  = doc(db, `users/${userId}/meta`, 'stats');
+    const snap = await getDoc(ref);
+    if (!snap.exists()) {
+      await setDoc(ref, {
+        memberSince:          serverTimestamp(),
+        totalDownloads:       0,
+        audioDownloads:       0,
+        videoDownloads:       0,
+        totalPlaybackMinutes: 0,
+        lastActiveAt:         serverTimestamp(),
+        favoritePlaylists:    {},
+      });
+    }
+  } catch (_) {}
+}
+
+// Stamps the last-active time whenever the app comes to the foreground.
+async function updateLastActive(userId) {
+  try {
+    const ref = doc(db, `users/${userId}/meta`, 'stats');
+    await updateDoc(ref, { lastActiveAt: serverTimestamp() });
+  } catch (_) {}
+}
+
 function SplashScreen() {
   return (
     <View style={styles.splash}>
@@ -139,11 +166,23 @@ export default function App() {
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) await initUserPlaylists(firebaseUser.uid);
+      if (firebaseUser) {
+        await initUserPlaylists(firebaseUser.uid);
+        await initUserStats(firebaseUser.uid);
+      }
       setUser(firebaseUser ?? null);
     });
     return unsub;
   }, []);
+
+  // Update lastActiveAt whenever the app comes back to the foreground.
+  useEffect(() => {
+    if (!user) return;
+    const sub = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') updateLastActive(user.uid);
+    });
+    return () => sub.remove();
+  }, [user?.uid]);
 
   if (user === undefined) return <SplashScreen />;
 

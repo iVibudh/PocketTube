@@ -1,5 +1,5 @@
 // src/components/DrawerContent.js
-// Custom sidebar drawer — profile, navigation, plan badge, upgrade CTA, sign out.
+// Custom sidebar drawer — profile, navigation, plan badge, stats, upgrade CTA, sign out.
 
 import React, { useEffect, useState } from 'react';
 import {
@@ -11,8 +11,37 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import { COLORS } from '../constants';
 
+// ── Stats formatting helpers ──────────────────────────────────────────────────
+function formatPlaybackTime(minutes) {
+  if (!minutes) return '0m';
+  const h = Math.floor(minutes / 60);
+  const m = Math.round(minutes % 60);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+function getTopPlaylist(map) {
+  if (!map) return '—';
+  const entries = Object.entries(map);
+  if (!entries.length) return '—';
+  return entries.sort((a, b) => b[1] - a[1])[0][0];
+}
+
+function formatMemberSince(ts) {
+  if (!ts) return '—';
+  const d = ts.toDate ? ts.toDate() : new Date(ts);
+  return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+}
+
+function getDaysSince(ts) {
+  if (!ts) return '—';
+  const d = ts.toDate ? ts.toDate() : new Date(ts);
+  const days = Math.floor((Date.now() - d.getTime()) / 86400000);
+  return days === 0 ? 'Today' : `${days}`;
+}
+
 export default function DrawerContent(props) {
-  const [plan, setPlan] = useState('free');
+  const [plan,  setPlan]  = useState('free');
+  const [stats, setStats] = useState(null);
   const user = auth.currentUser;
 
   // Listen for plan changes in real time (will update instantly after Stripe
@@ -22,6 +51,16 @@ export default function DrawerContent(props) {
     const ref = doc(db, `users/${user.uid}/meta`, 'plan');
     const unsub = onSnapshot(ref, (snap) => {
       if (snap.exists()) setPlan(snap.data()?.plan ?? 'free');
+    });
+    return unsub;
+  }, [user?.uid]);
+
+  // Listen for stats changes in real time.
+  useEffect(() => {
+    if (!user) return;
+    const ref = doc(db, `users/${user.uid}/meta`, 'stats');
+    const unsub = onSnapshot(ref, (snap) => {
+      if (snap.exists()) setStats(snap.data());
     });
     return unsub;
   }, [user?.uid]);
@@ -106,6 +145,24 @@ export default function DrawerContent(props) {
 
         <View style={styles.divider} />
 
+        {/* Stats section — visible once the stats doc has loaded */}
+        {stats && (
+          <View style={styles.statsSection}>
+            <Text style={styles.statsSectionTitle}>YOUR STATS</Text>
+            <StatRow icon="📅" label="Member since"  value={formatMemberSince(stats.memberSince)} />
+            <StatRow
+              icon="📥" label="Downloads"
+              value={String(stats.totalDownloads ?? 0)}
+              sub={`${stats.audioDownloads ?? 0} audio · ${stats.videoDownloads ?? 0} video`}
+            />
+            <StatRow icon="▶️" label="Playback"      value={formatPlaybackTime(stats.totalPlaybackMinutes)} />
+            <StatRow icon="🎵" label="Top playlist"  value={getTopPlaylist(stats.favoritePlaylists)} />
+            <StatRow icon="📆" label="Days active"   value={getDaysSince(stats.memberSince)} />
+          </View>
+        )}
+
+        <View style={styles.divider} />
+
         {/* Upgrade CTA — only shown to Free users */}
         {!isPro && (
           <TouchableOpacity
@@ -145,6 +202,20 @@ function NavItem({ icon, label, onPress }) {
       <Text style={styles.navIcon}>{icon}</Text>
       <Text style={styles.navLabel}>{label}</Text>
     </TouchableOpacity>
+  );
+}
+
+// ─── Reusable stat row ───────────────────────────────────────────────────────
+function StatRow({ icon, label, value, sub }) {
+  return (
+    <View style={styles.statRow}>
+      <Text style={styles.statIcon}>{icon}</Text>
+      <View style={styles.statLabelWrap}>
+        <Text style={styles.statLabel}>{label}</Text>
+        {sub ? <Text style={styles.statSub}>{sub}</Text> : null}
+      </View>
+      <Text style={styles.statValue}>{value}</Text>
+    </View>
   );
 }
 
@@ -244,6 +315,49 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     fontSize: 15,
     fontWeight: '500',
+  },
+
+  // ── Stats ──
+  statsSection: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    gap: 2,
+  },
+  statsSectionTitle: {
+    color: COLORS.textMuted,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    marginBottom: 6,
+  },
+  statRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    gap: 10,
+  },
+  statIcon: {
+    fontSize: 15,
+    width: 22,
+    textAlign: 'center',
+  },
+  statLabelWrap: {
+    flex: 1,
+  },
+  statLabel: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+  },
+  statSub: {
+    color: COLORS.textMuted,
+    fontSize: 10,
+    marginTop: 1,
+  },
+  statValue: {
+    color: COLORS.textPrimary,
+    fontSize: 13,
+    fontWeight: '600',
   },
 
   // ── Upgrade CTA ──
