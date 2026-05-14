@@ -3,6 +3,7 @@ const router = express.Router();
 const path = require('path');
 const { downloadMedia } = require('../utils/ytdlp');
 const { createJob, updateJob } = require('../utils/jobs');
+const { isValidYouTubeUrl, isValidResolution } = require('../utils/validate');
 
 /**
  * POST /api/download
@@ -28,8 +29,14 @@ router.post('/', async (req, res) => {
   if (!url || !format) {
     return res.status(400).json({ error: 'url and format are required' });
   }
+  if (!isValidYouTubeUrl(url)) {
+    return res.status(400).json({ error: 'url must be a valid YouTube URL' });
+  }
   if (!['audio', 'video'].includes(format)) {
     return res.status(400).json({ error: 'format must be "audio" or "video"' });
+  }
+  if (!isValidResolution(resolution)) {
+    return res.status(400).json({ error: 'resolution must be one of: 360, 480, 720, 1080, 1440, 2160' });
   }
 
   const jobId = createJob();

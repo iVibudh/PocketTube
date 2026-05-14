@@ -46,18 +46,18 @@ This repo is a learning project. It covers React Native, Expo, Google OAuth, Fir
 
 | Bug | Platform | What happens | Fix applied in v1.2.0 | Status |
 |---|---|---|---|---|
-| Audio stops on screen lock | iOS and Android | Background playback cuts out when screen locks or user switches apps | Moved `useAudioPlayer` into persistent `PlayerContext`; `staysActiveInBackground: true` set | ❌ Still broken on iOS and Android — deferred to v1.7 |
-| Video shows no picture | iOS only | Downloaded video plays audio only — black screen | Forced H.264/AVC codec + `-movflags +faststart` in yt-dlp format selector | ❌ Still broken on iOS — deferred to v1.7 |
+| Audio stops on screen lock | iOS and Android | Background playback cuts out when screen locks or user switches apps | Moved `useAudioPlayer` into persistent `PlayerContext`; `staysActiveInBackground: true` set | ❌ Still broken on iOS and Android — deferred to v1.8 |
+| Video shows no picture | iOS only | Downloaded video plays audio only — black screen | Forced H.264/AVC codec + `-movflags +faststart` in yt-dlp format selector | ❌ Still broken on iOS — deferred to v1.8 |
 
 | Video shows no picture | Android | Downloaded video plays audio only — black screen | Same H.264/AVC + faststart fix | ✅ Resolved on Android in v1.2.0 |
 
-> **Background audio is broken on both iOS and Android** — deferred to v1.7. Video playback works on Android but iOS still shows a black screen (audio only). These issues likely require deeper investigation into how `expo-audio`/`expo-video` interact with the audio session and AVFoundation on a real device build. Expo Go's sandboxed environment may be masking the root cause.
+> **Background audio is broken on both iOS and Android** — deferred to v1.8. Video playback works on Android but iOS still shows a black screen (audio only). These issues likely require deeper investigation into how `expo-audio`/`expo-video` interact with the audio session and AVFoundation on a real device build. Expo Go's sandboxed environment may be masking the root cause.
 
 ---
 
 ## ✅ Master Checklist
 
-> **Current version: 1.3.0** · Targeting: **1.4.0** · Planned: **1.5.0, 1.6.0, 1.7.0**
+> **Current version: 1.3.0** · Targeting: **1.4.0** · Planned: **1.5.0, 1.6.0, 1.7.0, 1.8.0**
 
 ### v1.0.0 — Initial Build
 
@@ -83,8 +83,8 @@ This repo is a learning project. It covers React Native, Expo, Google OAuth, Fir
 ### v1.2.0 — Playback Fixes & Polish
 
 **Sprint 1 — Core Playback Fixes 🔴**
-- [~] Fix audio background playback — `PlayerContext` architecture in place; **still broken on both iOS and Android** (deferred to v1.7)
-- [~] Fix video playback — H.264/AVC + faststart fix applied; works on Android, **still broken on iOS** (deferred to v1.7)
+- [~] Fix audio background playback — `PlayerContext` architecture in place; **still broken on both iOS and Android** (deferred to v1.8)
+- [~] Fix video playback — H.264/AVC + faststart fix applied; works on Android, **still broken on iOS** (deferred to v1.8)
 - [x] Fix Firestore index error — filtering by playlist crashes with `failed-precondition`
 
 **Sprint 2 — Remove Local Desktop Dependency 🟡**
@@ -119,9 +119,9 @@ This repo is a learning project. It covers React Native, Expo, Google OAuth, Fir
 - [x] Google Sign-In confirmed working end-to-end on real Android device ✅
 - [x] APK available for sideloading — see **Install App on Android** section below
 
-**Track 2 — iPhone PWA** *(moved to v1.6.0)*
+**Track 2 — iPhone PWA** *(moved to v1.7.0)*
 
-> iPhone PWA support has been deferred to v1.6.0 to allow backend stability and security work (v1.4.0) and Stripe payments (v1.5.0) to land first.
+> iPhone PWA support has been deferred to v1.7.0 to allow backend stability and security work (v1.4.0), sidebar & stats (v1.5.0), and Stripe payments (v1.6.0) to land first.
 
 ### v1.4.0 — Backend Auto-Start & Security Hardening
 
@@ -149,7 +149,43 @@ This repo is a learning project. It covers React Native, Expo, Google OAuth, Fir
 - [ ] Harden the `/health` endpoint — return only `{ status: 'ok' }`; remove any version, environment name, or dependency info that could fingerprint the server
 - [ ] Add `.env` to a pre-commit git hook check — confirm it is in `.gitignore` and has never been staged; use `git secrets` or a simple pre-commit shell script
 
-### v1.5.0 — Stripe Payments
+### v1.5.0 — Sidebar, User Stats & Recommendations Feed
+
+> **Goal:** Replace the basic tab bar with a rich side drawer that serves as the app's control centre — account info, navigation, plan status, upgrade CTA, and user stats all in one place. Alongside this, add a Recommendations feed on the Download screen so users always have fresh content to grab.
+
+**Sprint 1 — Sidebar Navigation & Account 🔴**
+- [ ] Install `@react-navigation/drawer` and `react-native-gesture-handler` / `react-native-reanimated` (required peer deps)
+- [ ] Wrap the root navigator in a `DrawerNavigator`; keep the bottom tab bar for Download and Library but open the drawer via a hamburger icon in the header
+- [ ] Sidebar header: display Google profile photo, display name, and email pulled from `auth.currentUser`
+- [ ] Sidebar nav links: **Download** and **Library** — highlight the active screen
+- [ ] **Sign Out** button at the bottom of the sidebar — calls `signOut(auth)` and navigates back to `LoginScreen`
+- [ ] Plan badge next to the user name: teal **Pro** pill or grey **Free** pill — read from `users/{uid}/meta/plan` in Firestore (default `free` if document doesn't exist)
+- [ ] **Upgrade to Pro →** CTA row shown only to Free users — placeholder alert for now ("Coming in v1.6.0"); will wire to Stripe in v1.6.0
+
+**Sprint 2 — User Stats Dashboard 🟡**
+- [ ] On first sign-in write `memberSince: serverTimestamp()` to `users/{uid}/meta/stats` (only if the document doesn't already exist — use `setDoc` with `{ merge: true }`)
+- [ ] Increment `totalDownloads`, `audioDownloads`, `videoDownloads` counters in `users/{uid}/meta/stats` on every successful download (use Firestore `increment()`)
+- [ ] Track `totalPlaybackMinutes` — on `PlayerScreen` unmount, add elapsed seconds / 60 to the counter via `increment()`
+- [ ] Track `lastActiveAt` — update to `serverTimestamp()` whenever the app comes to the foreground (use `AppState` listener in `App.js`)
+- [ ] Track `favoritePlaylists` — store a map of `{ [playlistName]: downloadCount }` and increment the relevant key on each download
+- [ ] Add a **Stats** section at the bottom of the sidebar showing:
+  - 📅 Member since (formatted date)
+  - 📥 Total downloads (audio + video split)
+  - ▶️ Total playback time (hours and minutes)
+  - 🎵 Most downloaded playlist
+  - 📆 Days since first use
+
+**Sprint 3 — Recommendations Feed 🟠**
+- [ ] Add a **"For You"** tab/section below the URL input on the Download screen (toggle between "Download" and "For You" views)
+- [ ] On each successful download, save `channelName` and `playlist` category to `users/{uid}/meta/stats.channels` map (channel → count) and `stats.recentTags` array (last 20 title keywords, stripped of stop words)
+- [ ] Backend: add `GET /api/recommendations` route — accepts `channels[]` and `tags[]` query params; uses `yt-dlp --flat-playlist --dump-json` to fetch the latest 5 uploads from each of the top 3 channels; returns an array of `{ videoId, title, channel, thumbnailUrl, duration, url }` objects
+- [ ] Mobile: on "For You" tab open, call `/api/recommendations` with the user's top channels; show a scrollable `FlatList` of video cards (thumbnail, title, channel, duration)
+- [ ] Tapping a recommendation card pre-fills the URL input and switches to the Download view — user still chooses format and confirms
+- [ ] Empty state: "Download a few videos first and we'll suggest more from your favourite channels 🎵" — shown when `channels` map is empty
+
+---
+
+### v1.6.0 — Stripe Payments
 
 > **Why Stripe and not Apple StoreKit / Google Play Billing:** Because PocketTube is distributed as a sideloaded APK and a PWA — not through the App Store or Play Store — neither platform can enforce their payment rules or take their 15–30% cut. Stripe charges a flat 2.9% + 30¢ per transaction with no monthly fee, has a free sandbox for development, and its hosted Checkout page means you build no payment UI at all.
 
@@ -164,14 +200,13 @@ This repo is a learning project. It covers React Native, Expo, Google OAuth, Fir
 
 **Sprint 2 — Frontend: Upgrade Flow 🟡**
 - [ ] Add plan status read from Firestore on app launch — stored under `users/{uid}/meta/plan`
-- [ ] Add "Upgrade to Pro" button in the side menu (shown only to Free users)
-- [ ] On tap: call `/api/payments/create-checkout-session` → redirect to Stripe Checkout URL (browser on PWA; external browser on Android APK)
+- [ ] Wire the v1.5.0 sidebar "Upgrade to Pro →" CTA to call `/api/payments/create-checkout-session` → redirect to Stripe Checkout URL (browser on PWA; external browser on Android APK)
 - [ ] Add success and cancel redirect pages — success page confirms upgrade and links back to the app
 - [ ] Enforce Free plan cap (10 stored files) — show upgrade prompt when limit is reached
-- [ ] Show current plan badge in the side menu (Free / Pro)
+- [ ] Update sidebar plan badge from Free → Pro after successful payment (Firestore listener already in place from v1.5.0)
 - [ ] Test upgrade flow on both PWA (iPhone) and Android APK
 
-### v1.6.0 — iPhone PWA
+### v1.7.0 — iPhone PWA
 
 > **Goal:** Let iPhone users install PocketTube to their home screen without an Apple Developer account. iOS Safari cannot access files the app previously saved to device storage, so playback works by streaming from the backend (your PC must be on) or by letting the user pick a file from the Files app manually.
 
@@ -193,12 +228,14 @@ This repo is a learning project. It covers React Native, Expo, Google OAuth, Fir
 - [ ] Deploy to Vercel or Netlify free tier — permanent `https://` URL, no server needed
 - [ ] Test on iPhone: visit URL in Safari → "Add to Home Screen" → open app → sign in → download a file → play it back
 
-### v1.7.0 — iOS Platform Fixes
+### v1.8.0 — iOS Platform Fixes
 
 **iOS-specific bugs that were not resolved by the v1.2.0 fixes. Require deeper investigation on a real device build (not Expo Go).**
 
 - [ ] Fix background audio on iOS and Android — investigate `expo-audio` AVAudioSession (iOS) and audio focus (Android) interaction with Expo Go; likely needs a custom EAS build to test properly
 - [ ] Fix video playback on iOS — investigate `expo-video` / AVFoundation codec compatibility; check whether H.265/HEVC or container issues are the root cause on device
+
+> Deferred from v1.2.0. Background audio is broken on both iOS and Android; iOS video still shows black screen (audio only). Both issues likely require a custom EAS build to diagnose — Expo Go's sandbox masks the root cause.
 
 ---
 
@@ -313,8 +350,8 @@ These are not bugs — they are current constraints of the v1.1.0 build. Each on
 | Limitation | Status | Planned Fix |
 |---|---|---|
 | Google Sign-In blocked in Expo Go | Google rejects `exp://` redirect URIs | v1.3.0 — EAS Build + TestFlight |
-| Video player shows audio only (iOS) | iOS AVFoundation / expo-video codec issue | v1.7 investigation |
-| Audio stops on screen lock (iOS and Android) | Audio session behaviour in Expo Go | v1.7 investigation |
+| Video player shows audio only (iOS) | iOS AVFoundation / expo-video codec issue | v1.8 investigation |
+| Audio stops on screen lock (iOS and Android) | Audio session behaviour in Expo Go | v1.8 investigation |
 | ~~Video player shows audio only (Android)~~ | ~~yt-dlp format merge issue~~ | ✅ Fixed in v1.2.0 — H.264 + faststart |
 | ~~No lock screen / Control Center controls~~ | ~~NowPlayingInfo not wired up~~ | ✅ Fixed in v1.2.0 — wired via PlayerContext |
 | ~~Speed selector cycles one-by-one~~ | ~~No modal picker yet~~ | ✅ Fixed in v1.1.0 |
@@ -411,7 +448,7 @@ The media player is a core part of the app — both audio and video files should
 - **Pro plan** — one-time payment of **$9.99 + applicable taxes**, no subscription; Pro users have no limit on total stored files but are capped at **10 new downloads per day** to stay within backend resource limits
 - Plan status is stored in Firestore and verified on app launch
 
-> 💳 **Payment implementation planned for v1.5.0 via Stripe.** Because PocketTube distributes as a sideloaded APK and a PWA — not through the App Store or Play Store — neither Apple StoreKit nor Google Play Billing is required. Stripe handles the full payment flow at 2.9% + 30¢ per transaction (no monthly fee, no platform cut). Stripe Checkout is a hosted payment page: the backend creates a session, the app redirects the user there, and a webhook updates Firestore when payment completes.
+> 💳 **Payment implementation planned for v1.6.0 via Stripe.** Because PocketTube distributes as a sideloaded APK and a PWA — not through the App Store or Play Store — neither Apple StoreKit nor Google Play Billing is required. Stripe handles the full payment flow at 2.9% + 30¢ per transaction (no monthly fee, no platform cut). Stripe Checkout is a hosted payment page: the backend creates a session, the app redirects the user there, and a webhook updates Firestore when payment completes.
 
 ### 🗂️ Playlists *(tentative — may not be included in v1)*
 - Optionally organize downloads into playlist categories: Music, Podcasts, Sleep, Focus, Language, Videos, General
@@ -432,7 +469,7 @@ The media player is a core part of the app — both audio and video files should
 | File Storage | Device-local only (no cloud storage) | Free |
 | Download Engine | yt-dlp + Node.js backend | Free |
 | Cloud Hosting | Render.com | Free tier (750 hrs/month) |
-| Payments | Stripe Checkout *(v1.5.0)* | 2.9% + 30¢ per transaction — no platform cut (not distributed via App Store / Play Store) |
+| Payments | Stripe Checkout *(v1.6.0)* | 2.9% + 30¢ per transaction — no platform cut (not distributed via App Store / Play Store) |
 | iOS Distribution | TestFlight (personal) | $99/yr — Apple Dev account |
 
 ---
@@ -1709,7 +1746,7 @@ onAuthStateChanged(auth, (user) => {
 | Firebase Storage | Not used — files stored on device | $0 |
 | Render | Free tier (750 hrs/month) | $0 |
 | Expo Go | Run app on device during development | $0 |
-| **Total** | — | **$0/mo** |
+| **Total** | — | **$0/mo** *(+ 2.9% + 30¢ per Stripe transaction once v1.6.0 ships)* |
 
 > **Storage tip:** All media files are saved directly to your phone by the mobile app using `expo-file-system`. Nothing is uploaded to the cloud, so there are no storage costs regardless of how much you download.
 
